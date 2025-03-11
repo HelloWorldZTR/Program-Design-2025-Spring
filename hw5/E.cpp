@@ -73,7 +73,7 @@ public:
     }
     bool operator<(const WeaponType &_b) const
     {
-        //因为是sword, bomb, arrow可以用反字典序排
+        // 因为是sword, bomb, arrow可以用反字典序排
         return name > _b.name;
     }
     bool operator==(const WeaponType &_b) const
@@ -136,10 +136,24 @@ public:
     }
     bool operator<(const Weapon &_b) const
     {
-        if(type != _b.type)
+        if (type != _b.type)
             return type < _b.type;
         else
             return usedTimes < _b.usedTimes;
+    }
+    static bool compareBattle(const Weapon &a, const Weapon &b)
+    {
+        if (a.type != b.type)
+            return a.type < b.type;
+        else
+            return a.usedTimes > b.usedTimes; // 用过的次数多的在前
+    }
+    static bool compareRob(const Weapon &a, const Weapon &b)
+    {
+        if (a.type != b.type)
+            return a.type < b.type;
+        else
+            return a.usedTimes < b.usedTimes; // 用过的次数少的在前
     }
 };
 
@@ -200,12 +214,12 @@ public:
     }
 
     // Return Classified weapons
-    map<WeaponType, vector<Weapon &>> classifiedWeapons()
+    map<WeaponType, vector<Weapon>> classifiedWeapons()
     {
-        map<WeaponType, vector<Weapon &>> res;
-        res[sword] = vector<Weapon &>();
-        res[bomb] = vector<Weapon &>();
-        res[arrow] = vector<Weapon &>();
+        map<WeaponType, vector<Weapon>> res;
+        res[sword] = vector<Weapon>();
+        res[bomb] = vector<Weapon>();
+        res[arrow] = vector<Weapon>();
         for (auto &w : weapons)
         {
             res[w.type].push_back(w);
@@ -234,7 +248,7 @@ public:
  */
 class Team
 {
-private:
+public:
     string name;
     WarriorType sequence[5];                     // The sequence of warriors to spawn
     WeaponType weaponsSequence[3];               // Too lazy
@@ -420,23 +434,29 @@ public:
     }
     static void handleMarchInfo(int time, Team &red, Team &blue)
     {
-        for(int i=0; i<=N+1; i++) {
-            if(red.cities[i].size() > 0) {
+        for (int i = 0; i <= N + 1; i++)
+        {
+            if (red.cities[i].size() > 0)
+            {
                 Warrior &w = red.cities[i].back();
                 printMarchInfo(time, w, red, blue, i);
             }
-            if(blue.cities[i].size() > 0) {
+            if (blue.cities[i].size() > 0)
+            {
                 Warrior &w = blue.cities[i].back();
                 printMarchInfo(time, w, blue, red, i);
             }
         }
     }
-    static void printMarchInfo(int time, Warrior &w, Team& warriorTeam, Team& enemyTeam, int city) {
-        if(city == N + 1 - warriorTeam.baseLocation) {// Reach enemy base
+    static void printMarchInfo(int time, Warrior &w, Team &warriorTeam, Team &enemyTeam, int city)
+    {
+        if (city == N + 1 - warriorTeam.baseLocation)
+        { // Reach enemy base
             printf("%03d:10 %s %s %d reached %s headquarter with %d elements and force %d\n",
                    time, warriorTeam.name.c_str(), w.type.name.c_str(), w.id, enemyTeam.name.c_str(), w.life, w.force);
         }
-        else {
+        else
+        {
             printf("%03d:10 %s %s %d marched to city %d with %d elements and force %d\n",
                    time, warriorTeam.name.c_str(), w.type.name.c_str(), w.id, city, w.life, w.force);
         }
@@ -488,7 +508,7 @@ public:
                         }
                         else if (number > MAX_ROBBED)
                         {
-                            sort(weapons[w].begin(), weapons[w].end());
+                            sort(weapons[w].begin(), weapons[w].end(), Weapon::compareRob);
                             for (int j = 0; j < MAX_ROBBED; j++)
                             {
                                 w1.weapons.push_back(weapons[w][j]);
@@ -517,7 +537,7 @@ public:
                         }
                         else if (number > MAX_ROBBED)
                         {
-                            sort(weapons[w].begin(), weapons[w].end());
+                            sort(weapons[w].begin(), weapons[w].end(), Weapon::compareRob);
                             for (int j = 0; j < MAX_ROBBED; j++)
                             {
                                 w2.weapons.push_back(weapons[w][j]);
@@ -558,9 +578,151 @@ public:
             if (red.cities[i].size() > 0 && blue.cities[i].size() > 0)
             {
                 // Combat will occur
-                // TODO: Combat
+                Warrior &wr = red.cities[i].back();
+                Warrior &wb = blue.cities[i].back();
+                sort(wr.weapons.begin(), wr.weapons.end(), Weapon::compareBattle);
+                sort(wb.weapons.begin(), wb.weapons.end(), Weapon::compareBattle);
+                // Combat
+                Warrior *attacker, *defender;
+                if (i % 2 == 0) // Blue first
+                {
+                    attacker = &wb;
+                    defender = &wr;
+                }
+                else // Red first
+                {
+                    attacker = &wr;
+                    defender = &wb;
+                }
+                bool combatEnded = false;
+                map<Warrior *, int> weaponIndex;
+                weaponIndex[attacker] = 0;
+                weaponIndex[defender] = 0;
+
+                while (!combatEnded)
+                {
+                    handleAttack(attacker, defender, weaponIndex[attacker]);
+                    weaponIndex[attacker]++;
+                    if (weaponIndex[attacker] >= attacker->weapons.size())
+                    {
+                        weaponIndex[attacker] = 0;
+                    }
+                    swap(attacker, defender);
+                    if (attacker->life <= 0 || defender->life <= 0)
+                    {
+                        combatEnded = true;
+                    }
+                    if (attacker->weapons.size() == 0 && defender->weapons.size() == 0)
+                    {
+                        combatEnded = true;
+                    }
+                    if (checkDeadLoop(attacker) && checkDeadLoop(defender))
+                    {
+                        combatEnded = true;
+                    }
+                }
+                // Print combat result
+                if (wr.life <= 0 && wb.life <= 0)
+                {
+                    printf("%03d:40 both red %s %d and blue %s %d died in city %d\n",
+                           time, wr.type.name.c_str(), wr.id, wb.type.name.c_str(), wb.id, i);
+                    red.cities[i].pop_back();
+                    blue.cities[i].pop_back();
+                }
+                else if (wb.life <= 0)
+                {
+                    printf("%03d:40 red %s 1 killed blue %s %d in city %d remaining %d elements\n",
+                           time, wr.type.name.c_str(), wr.id, wb.type.name.c_str(), wb.id, i, wr.life);
+                    blue.cities[i].pop_back();
+                }
+                else if (wr.life <= 0)
+                {
+                    printf("%03d:40 blue %s %d killed red %s %d in city %d remaining %d elements\n",
+                           time, wb.type.name.c_str(), wb.id, wr.type.name.c_str(), wr.id, i, wb.life);
+                    red.cities[i].pop_back();
+                }
+                else
+                {
+                    printf("%03d:40 both red %s %d and blue %s %d were alive in city %d\n",
+                           time, wr.type.name.c_str(), wr.id, wb.type.name.c_str(), wb.id, i);
+                }
+                // Loot weapons
+                if (wr.life > 0 && wb.life <= 0)
+                {
+                    size_t maxLootCount = MAX_ROBBED - wr.weapons.size();
+                    sort(wb.weapons.begin(), wb.weapons.end(), Weapon::compareRob);
+                    for (int j = 0; j < min(maxLootCount, wb.weapons.size()); j++)
+                    {
+                        wr.weapons.push_back(wb.weapons[j]);
+                    }
+                }
+                else if (wb.life > 0 && wr.life <= 0)
+                {
+                    size_t maxLootCount = MAX_ROBBED - wb.weapons.size();
+                    sort(wr.weapons.begin(), wr.weapons.end(), Weapon::compareRob);
+                    for (int j = 0; j < min(maxLootCount, wr.weapons.size()); j++)
+                    {
+                        wb.weapons.push_back(wr.weapons[j]);
+                    }
+                }
+
+                // Handle Dragon
+                if (wr.life > 0 && wr.type == dragon) {
+                    printf("%03d:40 red dragon %d yelled in city %d\n", time, wr.id, i);
+                }
+                if (wb.life > 0 && wb.type == dragon) {
+                    printf("%03d:40 blue dragon %d yelled in city %d\n", time, wb.id, i);
+                }
             }
         }
+    }
+
+    static bool checkDeadLoop(Warrior *w)
+    {
+        if (w->weapons.size() == 0)
+            return true;
+        int swordDamage = (float)w->force * 2 / 10;
+        for (auto &weapon : w->weapons)
+        {
+            if (weapon.type == bomb)
+                return false;
+            if (weapon.type == arrow)
+                return false;
+        }
+        return swordDamage == 0;
+    }
+    // Handle attack
+    // Remove the weapon if it's used
+    // returns true if any damage is commited
+    static bool handleAttack(Warrior *attacker, Warrior *defender, int weaponIndex = 0)
+    {
+        if (attacker->weapons.size() == 0)
+            return false;
+        Weapon &w = attacker->weapons[weaponIndex];
+        int damage = 0;
+        if (w.type == sword)
+        {
+            damage = (float)attacker->force * 2 / 10;
+            defender->life -= damage;
+            attacker->removeWeapon(w);
+        }
+        else if (w.type == bomb)
+        {
+            damage = (float)attacker->force * 4 / 10;
+            defender->life -= damage;
+            if (attacker->type != ninja)
+                attacker->life -= damage / 2;
+            attacker->removeWeapon(w);
+        }
+        else if (w.type == arrow)
+        {
+            damage = (float)attacker->force * 3 / 10;
+            defender->life -= damage;
+            w.usedTimes++;
+            if (w.usedTimes == 2)
+                attacker->removeWeapon(w);
+        }
+        return damage > 0;
     }
 
     void reportElementsInfo(int time)
@@ -577,19 +739,21 @@ public:
             {
                 Warrior &w = red.cities[i].back();
                 auto weaponInfo = w.weaponCount();
-                printf("%03d:55 %s %s %d has %d sword %d bomb %d arrow and %d elements",
+                printf("%03d:55 %s %s %d has %d sword %d bomb %d arrow and %d elements\n",
                        time, red.name.c_str(), w.type.name.c_str(), w.id, weaponInfo[sword], weaponInfo[bomb], weaponInfo[arrow], w.life);
             }
             if (blue.cities[i].size() > 0)
             {
                 Warrior &w = blue.cities[i].back();
                 auto weaponInfo = w.weaponCount();
-                printf("%03d:55 %s %s %d has %d sword %d bomb %d arrow and %d elements",
+                printf("%03d:55 %s %s %d has %d sword %d bomb %d arrow and %d elements\n",
                        time, blue.name.c_str(), w.type.name.c_str(), w.id, weaponInfo[sword], weaponInfo[bomb], weaponInfo[arrow], w.life);
             }
         }
     }
 };
+
+int Team::N = 0;
 
 int main()
 {
@@ -627,6 +791,8 @@ int main()
         WarriorType sequenceRed[] = {iceman, lion, wolf, ninja, dragon};
         WarriorType sequenceBlue[] = {lion, dragon, ninja, iceman, wolf};
         WeaponType weaponsSequence[] = {sword, bomb, arrow};
+
+        Team::N = n;
 
         Team red(sequenceRed, weaponsSequence, "red", m, n, 0);
         Team blue(sequenceBlue, weaponsSequence, "blue", m, n, n + 1);
