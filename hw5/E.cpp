@@ -1,7 +1,8 @@
 /**
- * @author: hlwdztr
+ * @author: @HelloWorldZTR
  * @date: 2025/03/11
  * @version: 3.0
+ * @description: 魔兽世界三
  */
 
 #include <iostream>
@@ -9,7 +10,7 @@
 #include <map>
 #include <algorithm>
 
-// #define DEBUG
+// #define DEBUG // Debug mode
 
 const int MAX_CITY = 25;
 const int MAX_ROBBED = 10;
@@ -59,7 +60,6 @@ class WeaponType
 {
 private:
     string name;
-    int attack;
 
 public:
     WeaponType() {
@@ -129,7 +129,7 @@ public:
         type = other.type;
         usedTimes = other.usedTimes;
     }
-    Weapon(WeaponType _type)
+    Weapon(const WeaponType _type)
     {
         type = _type;
     }
@@ -152,6 +152,7 @@ public:
         else
             return usedTimes < _b.usedTimes;
     }
+    // 战斗时的排序
     static bool compareBattle(const Weapon &a, const Weapon &b)
     {
         if (a.type != b.type)
@@ -159,6 +160,7 @@ public:
         else
             return a.usedTimes > b.usedTimes; // 用过的次数多的在前
     }
+    // wolf 抢夺/战胜时的排序
     static bool compareRob(const Weapon &a, const Weapon &b)
     {
         if (a.type != b.type)
@@ -181,7 +183,7 @@ public:
     int force;
     int loyalty;
     float morale;
-    vector<Weapon> weapons;
+    vector<Weapon> weapons; // 最多10个武器
 
 public:
     Warrior()
@@ -215,7 +217,7 @@ public:
         return id == -1;
     }
 
-    // Return weapon count
+    // Return weapon count in each catagoery
     map<WeaponType, int> weaponCount()
     {
         map<WeaponType, int> res;
@@ -229,7 +231,7 @@ public:
         return res;
     }
 
-    // Return Classified weapons
+    // Return Classified weapons in each catagoery
     map<WeaponType, vector<Weapon>> classifiedWeapons()
     {
         map<WeaponType, vector<Weapon>> res;
@@ -255,7 +257,7 @@ public:
             if (*it == weapon)
             {
                 weapons.erase(it);
-                break;
+                break;  // delete one at a time
             }
         }
     }
@@ -268,30 +270,28 @@ public:
 class Team
 {
 public:
-    string name;
+    string name;                                 // Red/Blue
     WarriorType sequence[5];                     // The sequence of warriors to spawn
-    WeaponType weaponsSequence[3];               // Too lazy
     array<vector<Warrior>, MAX_CITY + 1> cities; // 0 ~ n+1 cities, store the warriors in each city
-    int idCounter;
-    int cursor = 0;
-    int life;
-    static int N;
+    int idCounter = 0;                           // The id of the last warrior
+    int cursor = 0;                              // the next type of warrior to spawn
+    int life;                                    // total life
     int baseLocation;
+
+    static int N;
+    static WeaponType weaponsSequence[3];       // Too lazy
 
 public:
     bool stopped = false;
 
 public:
-    Team(WarriorType _sequence[5], WeaponType _weaponSequence[3], string _name, int _life, int _N, int _baseLocation)
+    Team(WarriorType _sequence[5], 
+        string _name, int _life, int _N, int _baseLocation)
     {
         for (int i = 0; i < 5; i++)
         {
             sequence[i] = _sequence[i];
             idCounter = 0;
-        }
-        for (int i = 0; i < 3; i++)
-        {
-            weaponsSequence[i] = _weaponSequence[i];
         }
         name = _name;
         life = _life;
@@ -307,103 +307,85 @@ public:
     }
     void spawnNewWarrior(int time)
     {
-        if (stopped)
-            return;
-        // int cnt = 0;
-        // while (life < sequence[cursor].life)
-        // {
-        //     cursor++;
-        //     cursor %= 5;
-        //     cnt++;
-        //     if (cnt == 5)
-        //     {
-        //         stopped = true;
-        //         break;
-        //     }
-        // }
-        // if (cnt == 5)
-        // {
-        // }
-        // else
+        if (stopped)    return;
+        // Check if life is enough
+        if(life < sequence[cursor].life) // Stop when life is not enough for next warrior
         {
-            if(life < sequence[cursor].life)
-            {
-                stopped = true;
-                #ifdef DEBUG
-                cout<<name<<" stopped making new warriors"<<endl;
-                #endif
-                return;
-            }
-            // Prepare to spawn new warrior
-            WarriorType newType = sequence[cursor];
-            int n = ++idCounter; // id
-            life -= newType.life;
-            cursor++;
-            cursor %= 5;
-
-            // Spawn new warrior
-            Warrior *p;
-            if (newType == dragon)
-            {
-                Weapon weapon = Weapon(weaponsSequence[n % 3]);
-                vector<Weapon> weapons = {weapon};
-                float morale = (float)life / newType.life;
-                p = new Warrior(newType, n, -1, morale, weapons);
-            }
-            else if (newType == ninja)
-            {
-                Weapon weapon1 = Weapon(weaponsSequence[n % 3]);
-                Weapon weapon2 = Weapon(weaponsSequence[(n + 1) % 3]);
-                vector<Weapon> weapons = {weapon1, weapon2};
-                p = new Warrior(newType, n, -1, -1, weapons);
-            }
-            else if (newType == iceman)
-            {
-                Weapon weapon = Weapon(weaponsSequence[n % 3]);
-                p = new Warrior(newType, n, -1, -1, {weapon});
-            }
-            else if (newType == lion)
-            {
-                Weapon weapon = Weapon(weaponsSequence[n % 3]);
-                int loaylty = life;
-                p = new Warrior(newType, n, loaylty, -1, {weapon});
-            }
-            else if (newType == wolf)
-            {
-                p = new Warrior(newType, n);
-            }
-            else
-            {
-                throw "Invalid Warrior Type"; // Nope, impossible
-            }
-
-            cities[baseLocation].push_back(*p);
-
-            // Print the message
-            printf("%03d:00 %s %s %d born\n",
-                   time, name.c_str(), p->type.name.c_str(), p->id);
-            if (newType == lion)
-                printf("Its loyalty is %d\n", p->loyalty);
-#ifdef DEBUG
-            // printf("###");
-            // printf("%03d:00 %s %s %d born with strength %d,%d %s in %s headquarter\n",
-            //        time, name.c_str(), p->type.name.c_str(), p->id, p->type.life, cities[newType].size(), newType.name.c_str(), name.c_str());
-            // printf("###");
-            // if (newType == dragon)
-            //     printf("It has a %s,and it's morale is %.2f\n",
-            //            p->weapons[0].getName().c_str(), p->morale);
-            // else if (newType == ninja)
-            //     printf("It has a %s and a %s\n",
-            //            p->weapons[0].getName().c_str(), p->weapons[1].getName().c_str());
-            // else if (newType == iceman)
-            //     printf("It has a %s\n",
-            //            p->weapons[0].getName().c_str());
-            // else if (newType == lion)
-            //     printf("It's loyalty is %d\n",
-            //            p->loyalty);
-#endif
-            delete p;
+            stopped = true;
+            #ifdef DEBUG
+            cout<<name<<" stopped making new warriors"<<endl;
+            #endif
+            return;
         }
+        // Prepare to spawn new warrior
+        WarriorType newType = sequence[cursor];
+        int n = ++idCounter; // id
+        life -= newType.life;
+        cursor++;
+        cursor %= 5;
+
+        // Spawn new warrior
+        Warrior *p;
+        if (newType == dragon)
+        {
+            Weapon weapon = Weapon(weaponsSequence[n % 3]);
+            vector<Weapon> weapons = {weapon};
+            float morale = (float)life / newType.life;
+            p = new Warrior(newType, n, -1, morale, weapons);
+        }
+        else if (newType == ninja)
+        {
+            Weapon weapon1 = Weapon(weaponsSequence[n % 3]);
+            Weapon weapon2 = Weapon(weaponsSequence[(n + 1) % 3]);
+            vector<Weapon> weapons = {weapon1, weapon2};
+            p = new Warrior(newType, n, -1, -1, weapons);
+        }
+        else if (newType == iceman)
+        {
+            Weapon weapon = Weapon(weaponsSequence[n % 3]);
+            p = new Warrior(newType, n, -1, -1, {weapon});
+        }
+        else if (newType == lion)
+        {
+            Weapon weapon = Weapon(weaponsSequence[n % 3]);
+            int loaylty = life;
+            p = new Warrior(newType, n, loaylty, -1, {weapon});
+        }
+        else if (newType == wolf)
+        {
+            p = new Warrior(newType, n);
+        }
+        else
+        {
+            throw "Invalid Warrior Type"; // Nope, impossible
+        }
+
+        cities[baseLocation].push_back(*p);
+
+        // Print the message
+        printf("%03d:00 %s %s %d born\n",
+                time, name.c_str(), p->type.name.c_str(), p->id);
+        if (newType == lion)
+            printf("Its loyalty is %d\n", p->loyalty);
+#ifdef DEBUG
+        // printf("###");
+        // printf("%03d:00 %s %s %d born with strength %d,%d %s in %s headquarter\n",
+        //        time, name.c_str(), p->type.name.c_str(), p->id, p->type.life, cities[newType].size(), newType.name.c_str(), name.c_str());
+        // printf("###");
+        // if (newType == dragon)
+        //     printf("It has a %s,and it's morale is %.2f\n",
+        //            p->weapons[0].getName().c_str(), p->morale);
+        // else if (newType == ninja)
+        //     printf("It has a %s and a %s\n",
+        //            p->weapons[0].getName().c_str(), p->weapons[1].getName().c_str());
+        // else if (newType == iceman)
+        //     printf("It has a %s\n",
+        //            p->weapons[0].getName().c_str());
+        // else if (newType == lion)
+        //     printf("It's loyalty is %d\n",
+        //            p->loyalty);
+#endif
+        delete p;
     }
     void marchForward()
     {
@@ -500,9 +482,15 @@ public:
             return false;
         }
     }
+    /**
+     * Print xxx headquarter was taken
+     */
     static void printTakenInfo(int time, string team_name) {
         printf("%03d:10 %s headquarter was taken\n", time, team_name.c_str());
     }
+    /**
+     * Print which lion has run away
+     */
     void checkLionLoyalty(int time)
     {
         for (int i = 0; i <= N + 1; i++)
@@ -524,6 +512,9 @@ public:
             }
         }
     }
+    /**
+     * check which wolf can rob others, then rob
+     */
     static void handleWolfRob(int time, Team &red, Team &blue)
     {
         for (int i = 1; i <= N + 1; i++)
@@ -569,22 +560,30 @@ public:
         }
     }
 
-    static void printRobInfo(int time, string robber_team, int robber_id, int weapon_count, string weapon_name, string robbed_team, string robbed_name, int robbed_id, int city_id)
+    static void printRobInfo(int time, string robber_team, int robber_id, // no robbers name because it's always wolf
+        int weapon_count, string weapon_name, 
+        string robbed_team, string robbed_name, int robbed_id, int city_id)
     {
         if (city_id == 0)
         {
             printf("%03d:35 %s wolf %d took %d %s from %s %s %d in red headquarter\n",
-                   time, robber_team.c_str(), robber_id, weapon_count, weapon_name.c_str(), robbed_team.c_str(), robbed_name.c_str(), robbed_id);
+                   time, robber_team.c_str(), robber_id, 
+                   weapon_count, weapon_name.c_str(), 
+                   robbed_team.c_str(), robbed_name.c_str(), robbed_id);
         }
         else if (city_id == N + 1)
         {
             printf("%03d:35 %s wolf %d took %d %s from %s %s %d in blue headquarter\n",
-                   time, robber_team.c_str(), robber_id, weapon_count, weapon_name.c_str(), robbed_team.c_str(), robbed_name.c_str(), robbed_id);
+                   time, robber_team.c_str(), robber_id, 
+                   weapon_count, weapon_name.c_str(), 
+                   robbed_team.c_str(), robbed_name.c_str(), robbed_id);
         }
         else
         {
             printf("%03d:35 %s wolf %d took %d %s from %s %s %d in city %d\n",
-                   time, robber_team.c_str(), robber_id, weapon_count, weapon_name.c_str(), robbed_team.c_str(), robbed_name.c_str(), robbed_id, city_id);
+                   time, robber_team.c_str(), robber_id, 
+                   weapon_count, weapon_name.c_str(), 
+                   robbed_team.c_str(), robbed_name.c_str(), robbed_id, city_id);
         }
     }
 
@@ -592,9 +591,9 @@ public:
     {
         for (int i = 0; i <= N + 1; i++)
         {
+            // Combat will occur
             if (red.cities[i].size() > 0 && blue.cities[i].size() > 0)
             {
-                // Combat will occur
                 Warrior &wr = red.cities[i].back();
                 Warrior &wb = blue.cities[i].back();
                 sort(wr.weapons.begin(), wr.weapons.end(), Weapon::compareBattle);
@@ -612,7 +611,7 @@ public:
                     defender = &wb;
                 }
                 bool combatEnded = false;
-                map<Warrior *, int> weaponIndex;
+                map<Warrior *, int> weaponIndex; // which weapon to use 
                 weaponIndex[attacker] = 0;
                 weaponIndex[defender] = 0;
 
@@ -621,22 +620,14 @@ public:
                     handleAttack(attacker, defender, weaponIndex[attacker]);
                     weaponIndex[attacker]++;
                     if (weaponIndex[attacker] >= attacker->weapons.size())
-                    {
                         weaponIndex[attacker] = 0;
-                    }
                     swap(attacker, defender);
                     if (attacker->life <= 0 || defender->life <= 0)
-                    {
                         combatEnded = true;
-                    }
                     if (attacker->weapons.size() == 0 && defender->weapons.size() == 0)
-                    {
                         combatEnded = true;
-                    }
                     if (checkDeadLoop(attacker) && checkDeadLoop(defender))
-                    {
                         combatEnded = true;
-                    }
                 }
 
                 // Loot weapons
@@ -704,7 +695,11 @@ public:
             }
         }
     }
-
+    /**
+     * Check if the warrior is in a dead loop
+     * if a warrior has no weapons or 
+     * only has sword that can't deal damage, return true
+     */
     static bool checkDeadLoop(Warrior *w)
     {
         if (w->weapons.size() == 0)
@@ -719,9 +714,9 @@ public:
         }
         return swordDamage == 0;
     }
-    // Handle attack
-    // Remove the weapon if it's used
-    // returns true if any damage is commited
+    /** Handle attack
+     * Remove the weapon if it's used
+     *  returns true if any damage is commited */
     static bool handleAttack(Warrior *attacker, Warrior *defender, int weaponIndex = 0)
     {
         if (attacker->weapons.size() == 0)
@@ -755,13 +750,17 @@ public:
         }
         return damage > 0;
     }
-
+    /**
+     * It does what it says
+     */
     void reportElementsInfo(int time)
     {
         printf("%03d:50 %d elements in %s headquarter\n",
                time, life, name.c_str());
     }
-
+    /**
+     *  It does what it says
+     */
     static void reportWarriorInfo(int time, Team &red, Team &blue)
     {
         for (int i = 0; i <= N + 1; i++)
@@ -785,6 +784,7 @@ public:
 };
 
 int Team::N = 0;
+WeaponType Team::weaponsSequence[3] = {sword, bomb, arrow};
 
 int main()
 {
@@ -825,12 +825,11 @@ int main()
         // Initialize Teams
         WarriorType sequenceRed[] = {iceman, lion, wolf, ninja, dragon};
         WarriorType sequenceBlue[] = {lion, dragon, ninja, iceman, wolf};
-        WeaponType weaponsSequence[] = {sword, bomb, arrow};
 
         Team::N = n;
 
-        Team red(sequenceRed, weaponsSequence, "red", m, n, 0);
-        Team blue(sequenceBlue, weaponsSequence, "blue", m, n, n + 1);
+        Team red(sequenceRed, "red", m, n, 0);
+        Team blue(sequenceBlue, "blue", m, n, n + 1);
 
         // Start Simulations
         printf("Case %d:\n", i);
@@ -851,9 +850,8 @@ int main()
                 break;
             red.marchForward();
             blue.marchForward();
-            if(Team::handleMarchInfo(time, red, blue)){ // Game ends
+            if(Team::handleMarchInfo(time, red, blue)) // Game ends
                 break;
-            }
             //: 35
             if (time * 60 + 35 > t)
                 break;

@@ -1,3 +1,8 @@
+"""
+Run the C++ program with input from data.in and compare the output with data.out
+Copy this file to the same directory as the C++ program and data.in/data.out
+"""
+
 import subprocess
 
 # Compile the C++ program
