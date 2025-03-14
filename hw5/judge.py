@@ -8,7 +8,7 @@ if compile_process.returncode != 0:
     exit(1)
 
 # Run the compiled program with input from data.in
-with open('data2.in', 'r') as input_file, open('output.txt', 'w') as output_file:
+with open('data.in', 'r') as input_file, open('output.txt', 'w') as output_file:
     run_process = subprocess.run(['./E'], stdin=input_file, stdout=output_file, stderr=subprocess.PIPE, text=True)
     if run_process.returncode != 0:
         print("Program failed:")

@@ -9,6 +9,8 @@
 #include <map>
 #include <algorithm>
 
+// #define DEBUG
+
 const int MAX_CITY = 25;
 const int MAX_ROBBED = 10;
 
@@ -76,6 +78,10 @@ public:
         // 因为是sword, bomb, arrow可以用反字典序排
         return name < _b.name;
     }
+    bool operator>(const WeaponType &_b) const
+    {
+        return name > _b.name;
+    }
     bool operator==(const WeaponType &_b) const
     {
         return name == _b.name;
@@ -142,21 +148,21 @@ public:
     bool operator<(const Weapon &_b) const
     {
         if (type != _b.type)
-            return type < _b.type;
+            return type > _b.type;
         else
             return usedTimes < _b.usedTimes;
     }
     static bool compareBattle(const Weapon &a, const Weapon &b)
     {
         if (a.type != b.type)
-            return a.type < b.type;
+            return a.type > b.type;
         else
             return a.usedTimes > b.usedTimes; // 用过的次数多的在前
     }
     static bool compareRob(const Weapon &a, const Weapon &b)
     {
         if (a.type != b.type)
-            return a.type < b.type;
+            return a.type > b.type;
         else
             return a.usedTimes < b.usedTimes; // 用过的次数少的在前
     }
@@ -513,62 +519,37 @@ public:
             {
                 Warrior &w1 = red.cities[i].back();
                 Warrior &w2 = blue.cities[i].back();
-                if (w1.type == wolf && w2.type != wolf)
+                Warrior *robber, *robbed;
+                string robber_team, robbed_team;
+                if(w1.type == wolf && w2.type != wolf)
                 {
-                    auto weapons = w2.classifiedWeapons();
-                    for (WeaponType w : {sword, bomb, arrow})
-                    {
-                        int number = weapons[w].size();
-                        if (number > 0 && number <= MAX_ROBBED)
-                        {
-                            for (int j = 0; j < number; j++)
-                            {
-                                w1.weapons.push_back(weapons[w][j]);
-                                w2.removeWeapon(weapons[w][j]);
-                            }
-                            printRobInfo(time, red.name, w1.id, number, w.getName(), blue.name, w2.type.getName(), w2.id, i);
-                            return;
-                        }
-                        else if (number > MAX_ROBBED)
-                        {
-                            sort(weapons[w].begin(), weapons[w].end(), Weapon::compareRob);
-                            for (int j = 0; j < MAX_ROBBED; j++)
-                            {
-                                w1.weapons.push_back(weapons[w][j]);
-                                w2.removeWeapon(weapons[w][j]);
-                            }
-                            printRobInfo(time, red.name, w1.id, MAX_ROBBED, w.getName(), blue.name, w2.type.getName(), w2.id, i);
-                            return;
-                        }
-                    }
+                    robber = &w1;robber_team = red.name;
+                    robbed = &w2;robbed_team = blue.name;
                 }
-                else if (w2.type == wolf && w1.type != wolf)
+                else if(w2.type == wolf && w1.type != wolf)
                 {
-                    auto weapons = w1.classifiedWeapons();
-                    for (WeaponType w : {sword, bomb, arrow})
+                    robber = &w2;robber_team = blue.name;
+                    robbed = &w1;robbed_team = red.name;
+                }
+                else
+                {
+                    continue;
+                }
+                // Rob weapons
+                map<WeaponType, vector<Weapon>> weapons = robbed->classifiedWeapons();
+                for(auto type : {sword, bomb, arrow})
+                {
+                    if(weapons[type].size() > 0)
                     {
-                        int number = weapons[w].size();
-                        if (number > 0 && number <= MAX_ROBBED)
+                        size_t maxRobCount = (size_t)MAX_ROBBED - robber->weapons.size();
+                        for(int j = 0; j < min(maxRobCount, weapons[type].size()); j++)
                         {
-                            for (int j = 0; j < number; j++)
-                            {
-                                w2.weapons.push_back(weapons[w][j]);
-                                w1.removeWeapon(weapons[w][j]);
-                            }
-                            printRobInfo(time, blue.name, w2.id, number, w.getName(), red.name, w1.type.getName(), w1.id, i);
-                            return;
+                            Weapon w = weapons[type][j];
+                            robber->weapons.push_back(w);
+                            robbed->removeWeapon(w);
                         }
-                        else if (number > MAX_ROBBED)
-                        {
-                            sort(weapons[w].begin(), weapons[w].end(), Weapon::compareRob);
-                            for (int j = 0; j < MAX_ROBBED; j++)
-                            {
-                                w2.weapons.push_back(weapons[w][j]);
-                                w1.removeWeapon(weapons[w][j]);
-                            }
-                            printRobInfo(time, blue.name, w2.id, MAX_ROBBED, w.getName(), red.name, w1.type.getName(), w1.id, i);
-                            return;
-                        }
+                        printRobInfo(time, robber_team, robber->id, min(maxRobCount, weapons[type].size()), type.getName(), robbed_team, robbed->type.name, robbed->id, i);
+                        break;
                     }
                 }
             }
