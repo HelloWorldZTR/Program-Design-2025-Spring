@@ -309,27 +309,31 @@ public:
     {
         if (stopped)
             return;
-        int cnt = 0;
-        while (life < sequence[cursor].life)
+        // int cnt = 0;
+        // while (life < sequence[cursor].life)
+        // {
+        //     cursor++;
+        //     cursor %= 5;
+        //     cnt++;
+        //     if (cnt == 5)
+        //     {
+        //         stopped = true;
+        //         break;
+        //     }
+        // }
+        // if (cnt == 5)
+        // {
+        // }
+        // else
         {
-            cursor++;
-            cursor %= 5;
-            cnt++;
-            if (cnt == 5)
+            if(life < sequence[cursor].life)
             {
                 stopped = true;
-                break;
+                #ifdef DEBUG
+                cout<<name<<" stopped making new warriors"<<endl;
+                #endif
+                return;
             }
-        }
-        if (cnt == 5)
-        {
-#ifdef DEBUG
-            printf("%03d:00 %s headquarter stops making warriors\n",
-                   time, name.c_str());
-#endif
-        }
-        else
-        {
             // Prepare to spawn new warrior
             WarriorType newType = sequence[cursor];
             int n = ++idCounter; // id
@@ -414,6 +418,14 @@ public:
                         throw "Too many warriors in one city";
                     Warrior w = cities[i].back();
                     cities[i].pop_back();
+                    // Handle iceman life decrease
+                    if(w.type == iceman) {
+                        w.life -= (int)(float)w.life / 10;
+                    }
+                    // Handle lion loyalty decrease
+                    if(w.type == lion) {
+                        w.loyalty -= lion.loyalty_decay;
+                    }
                     cities[i + 1].push_back(w);
                 }
             }
@@ -428,67 +440,68 @@ public:
                         throw "Too many warriors in one city";
                     Warrior w = cities[i].back();
                     cities[i].pop_back();
+                    // Handle iceman life decrease
+                    if(w.type == iceman) {
+                        w.life -= (int)(float)w.life / 10;
+                    }
+                    // Handle lion loyalty decrease
+                    if(w.type == lion) {
+                        w.loyalty -= lion.loyalty_decay;
+                    }
                     cities[i - 1].push_back(w);
                 }
             }
         }
-        // Handle iceman life decrease
-        for (int i = 1; i <= N; i++)
-        {
-            if (cities[i].size() > 0)
-            {
-                Warrior &w = cities[i].back();
-                if (w.type == iceman)
-                {
-                    // cout<<"-----"<<endl;
-                    // cout<<w.life<<endl;
-                    w.life -= (int)(float)w.life / 10; // Not dead yet
-                }
-            }
-        }
-        // Handle lion loyalty
-        for (int i = 0; i <= N; i++)
-        {
-            if (i == N + 1 - baseLocation)
-                continue; // ignore warroirs in enemy base
-            if (cities[i].size() > 0)
-            {
-                Warrior &w = cities[i].back();
-                if (w.type == lion)
-                {
-                    w.loyalty -= w.type.loyalty_decay; // Dont ran away at this time
-                }
-            }
-        }
     }
-    static void handleMarchInfo(int time, Team &red, Team &blue)
+    /**
+     * Handle march info
+     * return true if the game ends(reaches enemy base)
+     */
+    static bool handleMarchInfo(int time, Team &red, Team &blue)
     {
+        bool ended = false;
         for (int i = 0; i <= N + 1; i++)
         {
             if (red.cities[i].size() > 0)
             {
                 Warrior &w = red.cities[i].back();
-                printMarchInfo(time, w, red, blue, i);
+                if(printMarchInfo(time, w, red, blue, i)){
+                    printTakenInfo(time, blue.name);
+                    ended = true;
+                }
             }
             if (blue.cities[i].size() > 0)
             {
                 Warrior &w = blue.cities[i].back();
-                printMarchInfo(time, w, blue, red, i);
+                if(printMarchInfo(time, w, blue, red, i)){
+                    printTakenInfo(time, red.name);
+                    ended = true;
+                }
             }
         }
+        return ended;
     }
-    static void printMarchInfo(int time, Warrior &w, Team &warriorTeam, Team &enemyTeam, int city)
+     /**
+     * Print a single line of march info
+     * return true if the game ends(reaches enemy base)
+     */
+    static bool printMarchInfo(int time, Warrior &w, Team &warriorTeam, Team &enemyTeam, int city)
     {
         if (city == N + 1 - warriorTeam.baseLocation)
         { // Reach enemy base
             printf("%03d:10 %s %s %d reached %s headquarter with %d elements and force %d\n",
                    time, warriorTeam.name.c_str(), w.type.name.c_str(), w.id, enemyTeam.name.c_str(), w.life, w.force);
+            return true;
         }
         else
         {
             printf("%03d:10 %s %s %d marched to city %d with %d elements and force %d\n",
                    time, warriorTeam.name.c_str(), w.type.name.c_str(), w.id, city, w.life, w.force);
+            return false;
         }
+    }
+    static void printTakenInfo(int time, string team_name) {
+        printf("%03d:10 %s headquarter was taken\n", time, team_name.c_str());
     }
     void checkLionLoyalty(int time)
     {
@@ -838,7 +851,9 @@ int main()
                 break;
             red.marchForward();
             blue.marchForward();
-            Team::handleMarchInfo(time, red, blue);
+            if(Team::handleMarchInfo(time, red, blue)){ // Game ends
+                break;
+            }
             //: 35
             if (time * 60 + 35 > t)
                 break;
