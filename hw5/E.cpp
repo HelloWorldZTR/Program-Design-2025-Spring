@@ -9,8 +9,6 @@
 #include <map>
 #include <algorithm>
 
-#define DEBUG
-
 const int MAX_CITY = 25;
 const int MAX_ROBBED = 10;
 
@@ -62,7 +60,9 @@ private:
     int attack;
 
 public:
-    WeaponType() {}
+    WeaponType() {
+        name = "none";
+    }
     WeaponType(string _name)
     {
         name = _name;
@@ -74,7 +74,7 @@ public:
     bool operator<(const WeaponType &_b) const
     {
         // 因为是sword, bomb, arrow可以用反字典序排
-        return name > _b.name;
+        return name < _b.name;
     }
     bool operator==(const WeaponType &_b) const
     {
@@ -117,6 +117,11 @@ public:
     Weapon()
     {
         type = none;
+    }
+    Weapon(const Weapon& other)
+    {
+        type = other.type;
+        usedTimes = other.usedTimes;
     }
     Weapon(WeaponType _type)
     {
@@ -177,7 +182,10 @@ public:
     {
         id = -1; // Not exist
     }
-
+    ~Warrior()
+    {
+        weapons.clear();
+    }
     Warrior(WarriorType &_type, int _id, int _loyalty = -1, float _morale = -1, vector<Weapon> _weapons = vector<Weapon>())
     {
         type = _type;
@@ -185,7 +193,9 @@ public:
         loyalty = _loyalty;
         morale = _morale;
         weapons = _weapons;
+        weapons.reserve(10);
         life = type.life;
+        force = type.force;
     }
 
     operator string()
@@ -231,6 +241,9 @@ public:
     // Have to make sure it exists yourself
     void removeWeapon(Weapon &weapon)
     {
+        #ifdef DEBUG
+        cout<<"Remove "<<weapon.getName()<<" from "<<type.getName()<<" "<<id<<endl;
+        #endif
         for (auto it = weapons.begin(); it != weapons.end(); it++)
         {
             if (*it == weapon)
@@ -278,6 +291,13 @@ public:
         life = _life;
         N = _N;
         baseLocation = _baseLocation;
+    }
+    ~Team()
+    {
+        for (int i = 0; i <= N + 1; i++)
+        {
+            cities[i].clear();
+        }
     }
     void spawnNewWarrior(int time)
     {
@@ -330,13 +350,13 @@ public:
             else if (newType == iceman)
             {
                 Weapon weapon = Weapon(weaponsSequence[n % 3]);
-                vector<Weapon> weapons = {weapon};
-                p = new Warrior(newType, n, -1, -1, weapons);
+                p = new Warrior(newType, n, -1, -1, {weapon});
             }
             else if (newType == lion)
             {
+                Weapon weapon = Weapon(weaponsSequence[n % 3]);
                 int loaylty = life;
-                p = new Warrior(newType, n, loaylty);
+                p = new Warrior(newType, n, loaylty, -1, {weapon});
             }
             else if (newType == wolf)
             {
@@ -372,6 +392,7 @@ public:
             //     printf("It's loyalty is %d\n",
             //            p->loyalty);
 #endif
+            delete p;
         }
     }
     void marchForward()
@@ -406,14 +427,16 @@ public:
             }
         }
         // Handle iceman life decrease
-        for (int i = 0; i <= N; i++)
+        for (int i = 1; i <= N; i++)
         {
             if (cities[i].size() > 0)
             {
                 Warrior &w = cities[i].back();
                 if (w.type == iceman)
                 {
-                    w.life -= w.type.life * 0.1; // Not dead yet
+                    // cout<<"-----"<<endl;
+                    // cout<<w.life<<endl;
+                    w.life -= (int)(float)w.life / 10; // Not dead yet
                 }
             }
         }
@@ -621,7 +644,35 @@ public:
                         combatEnded = true;
                     }
                 }
+
+                // Loot weapons
+                if (wr.life > 0 && wb.life <= 0)
+                {
+                    size_t maxLootCount = (size_t)MAX_ROBBED - wr.weapons.size();
+                    sort(wb.weapons.begin(), wb.weapons.end(), Weapon::compareRob);
+                    for (int j = 0; j < min(maxLootCount, wb.weapons.size()); j++)
+                    {
+                        #ifdef DEBUG
+                        cout << wr.type.name << " " << wr.id << " looted " << wb.weapons[j].getName() << " from " << wb.type.name << " " << wb.id << endl;
+                        #endif
+                        wr.weapons.push_back(wb.weapons[j]);
+                    }
+                }
+                else if (wb.life > 0 && wr.life <= 0)
+                {
+                    size_t maxLootCount = (size_t)MAX_ROBBED - wb.weapons.size();
+                    sort(wr.weapons.begin(), wr.weapons.end(), Weapon::compareRob);
+                    for (int j = 0; j < min(maxLootCount, wr.weapons.size()); j++)
+                    {
+                        #ifdef DEBUG
+                        cout << wb.type.name << " " << wb.id << " looted " << wr.weapons[j].getName() << " from " << wr.type.name << " " << wr.id << endl;
+                        #endif
+                        wb.weapons.push_back(wr.weapons[j]);
+                    }
+                }
+
                 // Print combat result
+                // Delete dead warriors(this has to be done after looting)
                 if (wr.life <= 0 && wb.life <= 0)
                 {
                     printf("%03d:40 both red %s %d and blue %s %d died in city %d\n",
@@ -631,7 +682,7 @@ public:
                 }
                 else if (wb.life <= 0)
                 {
-                    printf("%03d:40 red %s 1 killed blue %s %d in city %d remaining %d elements\n",
+                    printf("%03d:40 red %s %d killed blue %s %d in city %d remaining %d elements\n",
                            time, wr.type.name.c_str(), wr.id, wb.type.name.c_str(), wb.id, i, wr.life);
                     blue.cities[i].pop_back();
                 }
@@ -646,31 +697,14 @@ public:
                     printf("%03d:40 both red %s %d and blue %s %d were alive in city %d\n",
                            time, wr.type.name.c_str(), wr.id, wb.type.name.c_str(), wb.id, i);
                 }
-                // Loot weapons
-                if (wr.life > 0 && wb.life <= 0)
-                {
-                    size_t maxLootCount = MAX_ROBBED - wr.weapons.size();
-                    sort(wb.weapons.begin(), wb.weapons.end(), Weapon::compareRob);
-                    for (int j = 0; j < min(maxLootCount, wb.weapons.size()); j++)
-                    {
-                        wr.weapons.push_back(wb.weapons[j]);
-                    }
-                }
-                else if (wb.life > 0 && wr.life <= 0)
-                {
-                    size_t maxLootCount = MAX_ROBBED - wb.weapons.size();
-                    sort(wr.weapons.begin(), wr.weapons.end(), Weapon::compareRob);
-                    for (int j = 0; j < min(maxLootCount, wr.weapons.size()); j++)
-                    {
-                        wb.weapons.push_back(wr.weapons[j]);
-                    }
-                }
 
                 // Handle Dragon
-                if (wr.life > 0 && wr.type == dragon) {
+                if (wr.life > 0 && wr.type == dragon)
+                {
                     printf("%03d:40 red dragon %d yelled in city %d\n", time, wr.id, i);
                 }
-                if (wb.life > 0 && wb.type == dragon) {
+                if (wb.life > 0 && wb.type == dragon)
+                {
                     printf("%03d:40 blue dragon %d yelled in city %d\n", time, wb.id, i);
                 }
             }
@@ -699,12 +733,15 @@ public:
         if (attacker->weapons.size() == 0)
             return false;
         Weapon &w = attacker->weapons[weaponIndex];
+#ifdef DEBUG
+        cout<< attacker->type.name <<" "<<attacker->id<<" used "<< w.getName() <<" on "<<defender->type.name<<" "<<defender->id<<endl;
+#endif        
         int damage = 0;
         if (w.type == sword)
         {
             damage = (float)attacker->force * 2 / 10;
             defender->life -= damage;
-            attacker->removeWeapon(w);
+            // Dont break
         }
         else if (w.type == bomb)
         {
@@ -757,6 +794,9 @@ int Team::N = 0;
 
 int main()
 {
+#ifdef DEBUG
+    freopen("data2.in", "r", stdin);
+#endif
     int testCasesCount;
     scanf("%d", &testCasesCount);
     for (int i = 1; i <= testCasesCount; i++)
@@ -784,6 +824,7 @@ int main()
         iceman.force = forces[2];
         lion.life = lifes[3];
         lion.loyalty_decay = k;
+        lion.force = forces[3];
         wolf.life = lifes[4];
         wolf.force = forces[4];
 
@@ -798,32 +839,43 @@ int main()
         Team blue(sequenceBlue, weaponsSequence, "blue", m, n, n + 1);
 
         // Start Simulations
-        cout << "Case:" << i << endl;
-        for (int time = 0; time <= t; time++)
+        printf("Case %d:\n", i);
+        for (int time = 0;; time++)
         {
-            if (red.stopped && blue.stopped)
-                break;
             //: 00
+            if (time * 60 + 0 > t)
+                break;
             red.spawnNewWarrior(time);
             blue.spawnNewWarrior(time);
             //: 05
+            if (time * 60 + 5 > t)
+                break;
             red.checkLionLoyalty(time);
             blue.checkLionLoyalty(time);
             //: 10
+            if (time * 60 + 10 > t)
+                break;
             red.marchForward();
             blue.marchForward();
             Team::handleMarchInfo(time, red, blue);
             //: 35
+            if (time * 60 + 35 > t)
+                break;
             Team::handleWolfRob(time, red, blue);
             //: 40
+            if (time * 60 + 40 > t)
+                break;
             Team::handleCombat(time, red, blue);
             //: 50
+            if (time * 60 + 50 > t)
+                break;
             red.reportElementsInfo(time);
             blue.reportElementsInfo(time);
             //: 55
+            if (time * 60 + 55 > t)
+                break;
             Team::reportWarriorInfo(time, red, blue);
-
-            time++;
         }
     }
+    return 0;
 }
