@@ -1,1 +1,6 @@
 .vscode
+CMakefiles
+CMakeCache.txt
+build.ninja
+cmake_install.cmake
+.*
