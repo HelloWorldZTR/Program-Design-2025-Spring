@@ -6,11 +6,12 @@
 #include <stack>
 #include <cstring>
 #include <set>
+#include <cstdio>
 
 using namespace std;
 
-// priority_queue<double, vector<double>, greater<double>> memory;
-multiset<double> memory;
+priority_queue<double, vector<double>, greater<double>> memory;
+// multiset<double> memory;
 char cmd[200];
 stack<double> st;
 
@@ -20,11 +21,11 @@ int main() {
     cout.tie(0);
 
     int n;
-    cin >> n;
+    scanf("%d", &n);
     for (int i = 0; i < n; i++) {
         double x;
-        cin >> x;
-        memory.insert(x);
+        scanf("%lf", &x);
+        memory.push(x);
     }
     cin.ignore();
 
@@ -76,18 +77,24 @@ int main() {
             }
         }
         double res = st.top(); st.pop();
-        if (res > *memory.begin()) {
-            memory.insert(res);
-            memory.erase(memory.begin());
-        }
         printf("%.6e\n", res);
+        memory.pop();
+        memory.push(res);
     }
+
     printf("\n");
-    for (auto it = memory.begin(); it != memory.end(); it++) {
-        if(it != memory.begin()) {
-            printf(" ");
+    int m = memory.size();
+    for(int i=1; i<=m; i++) {
+        if(i%10 == 0) {
+            printf("%.6e\n", memory.top());
         }
-        printf("%.6e", *it);
+        else if(i==m) {
+            printf("%.6e", memory.top());
+        }
+        else {
+            printf("%.6e ", memory.top());
+        }
+        memory.pop();
     }
     printf("\n");
 
