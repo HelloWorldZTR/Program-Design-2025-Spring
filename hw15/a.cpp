@@ -15,13 +15,16 @@ enum EEventType
 {
     EVENT_BORN,
     EVENT_LION_RUN,
+    EVENT_PICKUP,
     EVENT_MARCH,
-    EVENT_WOLFSROB,
     EVENT_ARROW,
     EVENT_BOMB,
-    EVENT_FIGHT_RESULT,
+    EVENT_ATTACK,
+    EVENT_FIGHT_BACK,
+    EVENT_DEAD,
     EVENT_YELL,
     EVENT_EARNMONEY,
+    EVENT_FLAG,
     EVENT_REACH,
     EVENT_CITYTAKEN,
     EVENT_PRINTMONEY,
@@ -45,385 +48,15 @@ enum
 #define WEAPON_NUM 3
 #define WARRIOR_NUM 5
 
+#define COLOR_RED 0
+#define COLOR_BLUE 1
+#define COLOR_NONE 3
+
 class CHeadquarter;
 class CKingdom;
 class CWarrior;
 class CWeapon;
 
-class CWeapon
-{
-public:
-    int nKindNo;
-    friend class CWarrior;
-    CWarrior *master;
-    static const char *Names[WEAPON_NUM];
-    friend int WpCompare(const void *wp1, const void *wp2);
-    friend int WpCompare2(const void *wp1, const void *wp2);
-
-    virtual int GetForce() {};
-    virtual void Use() {};
-    static CWeapon *NewWeapon(int idx, CWarrior *master)
-    {
-        switch (idx)
-        {
-        case 0:
-            return new CSword(master);
-        case 1:
-            return new CBomb(master);
-        case 2:
-            return new CArrow(master);
-        }
-        return NULL;
-    }
-    CWeapon(CWarrior *m) : master(m) {}
-};
-
-#define COLOR_RED 0
-#define COLOR_BLUE 1
-#define COLOR_NONE 3
-
-typedef CWarrior *PWARRIOR;
-string MyIntToStr(int n)
-{
-    char szTmp[300];
-    sprintf(szTmp, "%d", n);
-    return szTmp;
-}
-// cls CWarrior
-class CWarrior
-{
-public:
-    static const int MAX_WPS = 3;
-
-    friend class CHeadquarter;
-
-protected:
-    int nStrength;
-    int nForce;
-    int nCityNo;
-    int nId;
-    CHeadquarter *pHeadquarter;
-    CWeapon *weapons[MAX_WPS];
-
-public:
-    static const char *Names[WARRIOR_NUM];
-    static int InitialLifeValue[WARRIOR_NUM];
-    static int InitalForce[WARRIOR_NUM];
-    virtual bool Runaway() { return false; }
-    virtual string Yell() { return ""; }
-    virtual string TakeEnemyWeapons(CWarrior *pEnemy, bool beforeFight = false);
-    virtual ~CWarrior()
-    {
-        for (int i = 0; i < MAX_WPS; ++i)
-            if (weapons[i])
-                delete weapons[i];
-    }
-    virtual int GetAttackDamage() {
-        int atk = 0;
-        atk += nForce;
-        if (weapons[WEAPON_SWORD]) {
-            atk += weapons[WEAPON_SWORD]->GetForce();
-        }
-        return atk;
-    }
-    virtual int GetFightBackDamage() {
-        int dmg = 0;
-        if (weapons[WEAPON_SWORD]) {
-            dmg += weapons[WEAPON_SWORD]->GetForce();
-        }
-        return dmg;
-    }
-    virtual void Attack(CWarrior *pEnemy) {
-        int atk = 0;
-        atk += nForce;
-        if (weapons[WEAPON_SWORD]) {
-            atk += weapons[WEAPON_SWORD]->GetForce();
-            weapons[WEAPON_SWORD]->Use();
-        }
-        pEnemy->nStrength -= atk;
-    }
-    virtual void FightBack(CWarrior *pEnemy) {
-        if(nStrength <= 0)  return; //Dead already
-        int atk = 0;
-        atk += nForce  / 2;
-        if (weapons[WEAPON_SWORD]) {
-            atk += weapons[WEAPON_SWORD]->GetForce();
-            weapons[WEAPON_SWORD]->Use();
-        }
-        pEnemy->nStrength -= atk;
-    }
-    virtual string GetName() = 0;
-    virtual void March() {
-        if (GetColor() == COLOR_RED)
-            nCityNo++;
-        else
-            nCityNo--;
-    }
-
-    void SortWeapons(bool forTaken)
-    {
-        if (forTaken)
-            qsort(weapons, MAX_WPS, sizeof(CWeapon *), WpCompare2);
-        else
-            qsort(weapons, MAX_WPS, sizeof(CWeapon *), WpCompare);
-    }
-
-    CWarrior(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : nId(nId_), nStrength(nStrength_), nForce(nForce_), nCityNo(nCityNo_), pHeadquarter(pHeadquarter_)
-    {
-        memset(weapons, 0, sizeof(weapons));
-    }
-    int GetStrength() { return nStrength; }
-    int GetForce() { return nForce; }
-    void SetStrength(int n) { nStrength = n; }
-    void SetForce(int n) { nForce = n; }
-    int GetPosition() { return nCityNo; }
-    int GetColor() const { return pHeadquarter->GetColor(); }
-    string GetColorStr() { return pHeadquarter->GetColorStr();}
-    string ReportStatus()
-    {
-        char tmp[200];
-        sprintf(tmp, " has ");
-        if(!weapons[WEAPON_ARROW] && !weapons[WEAPON_SWORD] && !weapons[WEAPON_BOMB])
-            sprintf(tmp, "no weapons");
-        else {
-            if(weapons[WEAPON_ARROW]) {
-                sprintf(tmp, "arrow(%d),", 3 - ((CArrow *)weapons[WEAPON_ARROW])->usedTimes);
-            }
-            if(weapons[WEAPON_BOMB]) {
-                sprintf(tmp, "bomb,");
-            }
-            if(weapons[WEAPON_SWORD]) {
-                sprintf(tmp, "sword(%d),", weapons[WEAPON_SWORD]->GetForce());
-            }
-        }
-        int len = strlen(tmp);
-        if(tmp[len - 1] == ',')
-            tmp[len - 1] = '\0';
-        return string(tmp);
-    }
-};
-
-class CNinja : public CWarrior
-{
-    friend class CHeadquarter;
-
-public:
-    // CNinja constructor
-    CNinja(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
-    {
-        int wp1 = nId % 3;
-        int wp2 = (nId + 1) % 3;
-        weapons[wp1] = CWeapon::NewWeapon(wp1, this);
-        weapons[wp2] = CWeapon::NewWeapon(wp2, this);
-    }
-    virtual string GetName()
-    {
-        return pHeadquarter->GetColorStr() + " ninja " + MyIntToStr(nId);
-    }
-    virtual int GetFightBackDamage()
-    {
-        return 0;
-    }
-    virtual void FightBack(CWarrior *pEnemy)
-    {
-    }
-};
-class CDragon : public CWarrior
-{
-    friend class CHeadquarter;
-
-public:
-    // CDragon Constructor
-    float fMorale;
-    CDragon(int nId_, int nStrength_, int nForce_, int nCityNo_, float fMorale, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_), fMorale(fMorale)
-    {
-        weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
-    }
-    virtual void Attack(CWarrior *p)
-    {
-        CWarrior::Attack(p);
-    }
-    virtual void FightBack(CWarrior *pEnemy)
-    {
-        CWarrior::FightBack(pEnemy);
-    }
-    virtual string GetName() {
-        return pHeadquarter->GetColorStr() + " dragon " + MyIntToStr(nId);
-    }
-    virtual string Yell()
-    {
-        if (nStrength > 0 && fMorale > 0.8)
-        { // 没有战死
-            return GetName() + " yelled in city " + MyIntToStr(nCityNo);
-        }
-        else
-            return "";
-    }
-};
-
-class CLion : public CWarrior
-{
-    friend class CHeadquarter;
-
-private:
-    int nLoyalty;
-
-public:
-    static int nLoyaltyDec;
-    // CLion Constructor
-    CLion(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
-    {
-        nLoyalty = pHeadquarter->nMoney;
-        weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
-    }
-    virtual string GetName() {
-        return pHeadquarter->GetColorStr() + " lion " + MyIntToStr(nId);
-    }
-    bool Runaway()
-    {
-        return nLoyalty <= 0;
-    }
-    virtual void March() {
-        CWarrior::March();
-        nLoyalty -= nLoyaltyDec;
-    }
-};
-
-class CIceman : public CWarrior
-{
-    friend class CHeadquarter;
-    int stepCnt = 0;
-public:
-    // CIceman constructor
-    CIceman(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
-    {
-        weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
-    }
-    virtual void March() {
-        int enemyCityNo = pHeadquarter->pEnemyheadquarter->nCityNo;
-        if (nCityNo != enemyCityNo) {
-                stepCnt++;
-            if (stepCnt % 2 == 0) {
-                nStrength -= 9;
-                if (nStrength < 0)
-                    nStrength = 1;
-                nForce += 20;
-            }
-        }
-        CWarrior::March();
-    }
-    virtual string GetName() {
-        return pHeadquarter->GetColorStr() + " iceman " + MyIntToStr(nId);
-    }
-};
-
-class CWolf : public CWarrior
-{
-    friend class CHeadquarter;
-
-public:
-    // CWolf Constructor
-    CWolf(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
-    {
-        //no weapons
-    }
-    virtual string GetName() {
-        return pHeadquarter->GetColorStr() + " wolf " + MyIntToStr(nId);
-    }
-};
-
-class CSword : public CWeapon
-{
-    int power;
-public:
-    virtual void Use()
-    {
-        power *= 0.8;
-    }
-    virtual int GetForce()
-    {
-        return power;
-    }
-    CSword(CWarrior *m) : CWeapon(m) { 
-        nKindNo = 0; 
-        power = m->GetForce() * 0.2; 
-    }
-};
-class CArrow : public CWeapon
-{
-    int usedTimes;
-    int power;
-
-public:
-    static int initalPower;
-
-public:
-    CArrow(CWarrior *master) : CWeapon(master), usedTimes(0)
-    {
-        nKindNo = 2;
-        power = initalPower;
-    }
-    virtual int GetForce(CWarrior *pEnemy)
-    {
-        return power;
-    }
-    void Use()
-    {
-        usedTimes++;
-        if (usedTimes == 3) {
-            power = 0;
-        }
-    }
-    friend int WpCompare(const void *wp1, const void *wp2);
-    friend int WpCompare2(const void *wp1, const void *wp2);
-};
-class CBomb : public CWeapon
-{
-public:
-    CBomb(CWarrior *master) : CWeapon(master)
-    {
-        nKindNo = 1;
-    }
-};
-
-int WpCompare(const void *wp1, const void *wp2)
-{
-    CWeapon **p1 = (CWeapon **)wp1;
-    CWeapon **p2 = (CWeapon **)wp2;
-    if (*p1 == NULL)
-        return 1;
-    if (*p2 == NULL)
-        return -1;
-    if ((*p1)->nKindNo != (*p2)->nKindNo)
-        return (*p1)->nKindNo - (*p2)->nKindNo;
-    else
-    {
-        if ((*p1)->nKindNo == WEAPON_ARROW) // arrow
-            return ((CArrow *)(*p2))->usedTimes - ((CArrow *)(*p1))->usedTimes;
-        else
-            return 0;
-    }
-}
-int WpCompare2(const void *wp1, const void *wp2)
-{
-    CWeapon **p1 = (CWeapon **)wp1;
-    CWeapon **p2 = (CWeapon **)wp2;
-    if (*p1 == NULL)
-        return 1;
-    if (*p2 == NULL)
-        return -1;
-    if ((*p1)->nKindNo != (*p2)->nKindNo)
-        return (*p1)->nKindNo - (*p2)->nKindNo;
-    else
-    {
-        if ((*p1)->nKindNo == WEAPON_ARROW) // arrow
-            return ((CArrow *)(*p1))->usedTimes - ((CArrow *)(*p2))->usedTimes;
-        else
-            return 0;
-    }
-}
-
-// cls CHeadQuarter
 class CHeadquarter
 {
 
@@ -490,10 +123,56 @@ public:
     void CleanUpBattleField();
     void WarriorsReport();
     void EnemyReach();
+    void DeleteDeadWarriors();
     CWarrior *QueryCityWarrior(int nCityNo);
     CWarrior *QueryNextCityWarrior(int nCityNo);
 };
+class CWarrior
+{
+public:
+    static const int MAX_WPS = 3;
 
+    friend class CHeadquarter;
+
+protected:
+    int nStrength;
+    int nForce;
+    int nCityNo;
+    int nId;
+    CHeadquarter *pHeadquarter;
+    CWeapon *weapons[MAX_WPS];
+
+public:
+    static const char *Names[WARRIOR_NUM];
+    static int InitialLifeValue[WARRIOR_NUM];
+    static int InitalForce[WARRIOR_NUM];
+    virtual bool Runaway() { return false; }
+    virtual ~CWarrior();
+    virtual int GetAttackDamage();
+    virtual int GetFightBackDamage();
+    virtual void Attack(CWarrior *pEnemy); 
+    virtual void FightBack(CWarrior *pEnemy);
+    virtual string GetName() = 0;
+    virtual void March() {
+        if (GetColor() == COLOR_RED)
+            nCityNo++;
+        else
+            nCityNo--;
+    }
+
+    CWarrior(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : nId(nId_), nStrength(nStrength_), nForce(nForce_), nCityNo(nCityNo_), pHeadquarter(pHeadquarter_)
+    {
+        memset(weapons, 0, sizeof(weapons));
+    }
+    int GetStrength() { return nStrength; }
+    int GetForce() { return nForce; }
+    void SetStrength(int n) { nStrength = n; }
+    void SetForce(int n) { nForce = n; }
+    int GetPosition() { return nCityNo; }
+    int GetColor() const { return pHeadquarter->GetColor(); }
+    string GetColorStr() { return pHeadquarter->GetColorStr();}
+    string ReportStatus();
+};
 class CEvent
 {
 private:
@@ -555,8 +234,8 @@ private:
     int nEndTime;
     int nCityNum;
     int lifeValue[25];
-    int flags[25] = {-1};
-    int prevWinner[25] = {-1};
+    int flags[25];
+    int prevWinner[25];
 
 public:
     void Run(int T)
@@ -575,6 +254,9 @@ public:
         Blue.SetKingdom(this);
         Blue.SetEnemy(&Red);
         nEndTime = 3000000;
+        memset(lifeValue, 0, sizeof(lifeValue));
+        memset(flags, -1, sizeof(flags));
+        memset(prevWinner, -1, sizeof(prevWinner));
     }
     int TimePass(int nMinutes);
     string SysemTimeStr()
@@ -589,8 +271,10 @@ public:
     }
     void WarEnd()
     {
-        if (nEndTime == 3000000)
-            nEndTime = nTimeInMinutes;
+        nEndTime = nTimeInMinutes;
+        //FIXME: What does this mean????
+        // if (nEndTime == 3000000)
+        //     nEndTime = nTimeInMinutes;
     }
     void OutputResult()
     {
@@ -608,7 +292,217 @@ public:
     }
 };
 
-// CHeadquarter functions
+
+class CWeapon
+{
+public:
+    int nKindNo;
+    friend class CWarrior;
+    CWarrior *master;
+    static const char *Names[WEAPON_NUM];
+    friend int WpCompare(const void *wp1, const void *wp2);
+    friend int WpCompare2(const void *wp1, const void *wp2);
+
+    virtual int GetForce() {};
+    virtual void Use() {};
+    static CWeapon *NewWeapon(int idx, CWarrior *master);
+    CWeapon(CWarrior *m) : master(m) {}
+};
+class CSword : public CWeapon
+{
+    int power;
+public:
+    virtual void Use()
+    {
+        power *= 0.8;
+    }
+    virtual int GetForce()
+    {
+        return power;
+    }
+    CSword(CWarrior *m) : CWeapon(m) { 
+        nKindNo = 0; 
+        power = m->GetForce() * 0.2; 
+    }
+};
+class CArrow : public CWeapon
+{
+public:
+    int usedTimes;
+    int power;
+
+public:
+    static int initialPower;
+
+public:
+    CArrow(CWarrior *master) : CWeapon(master), usedTimes(0)
+    {
+        nKindNo = 2;
+        power = initialPower;
+    }
+    virtual int GetForce(CWarrior *pEnemy)
+    {
+        return power;
+    }
+    void Use()
+    {
+        usedTimes++;
+        if (usedTimes == 3) {
+            power = 0;
+        }
+    }
+    friend int WpCompare(const void *wp1, const void *wp2);
+    friend int WpCompare2(const void *wp1, const void *wp2);
+};
+class CBomb : public CWeapon
+{
+public:
+    CBomb(CWarrior *master) : CWeapon(master)
+    {
+        nKindNo = 1;
+    }
+};
+CWeapon *CWeapon::NewWeapon(int idx, CWarrior *master)
+{
+    switch (idx)
+    {
+    case WEAPON_SWORD:
+        return new CSword(master);
+    case WEAPON_BOMB:
+        return new CBomb(master);
+    case WEAPON_ARROW:
+        return new CArrow(master);
+    default:
+        return NULL;
+    }
+}
+
+
+
+typedef CWarrior *PWARRIOR;
+
+string MyIntToStr(int n)
+{
+    char szTmp[300];
+    sprintf(szTmp, "%d", n);
+    return szTmp;
+}
+
+class CNinja : public CWarrior
+{
+    friend class CHeadquarter;
+
+public:
+    // CNinja constructor
+    CNinja(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
+    {
+        int wp1 = nId % 3;
+        int wp2 = (nId + 1) % 3;
+        weapons[wp1] = CWeapon::NewWeapon(wp1, this);
+        weapons[wp2] = CWeapon::NewWeapon(wp2, this);
+    }
+    virtual string GetName()
+    {
+        return pHeadquarter->GetColorStr() + " ninja " + MyIntToStr(nId);
+    }
+    virtual int GetFightBackDamage()
+    {
+        return 0;
+    }
+    virtual void FightBack(CWarrior *pEnemy)
+    {
+    }
+};
+class CDragon : public CWarrior
+{
+    friend class CHeadquarter;
+
+public:
+    // CDragon Constructor
+    float fMorale;
+    CDragon(int nId_, int nStrength_, int nForce_, int nCityNo_, float fMorale, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_), fMorale(fMorale)
+    {
+        weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
+    }
+    virtual void Attack(CWarrior *p)
+    {
+        CWarrior::Attack(p);
+    }
+    virtual void FightBack(CWarrior *pEnemy)
+    {
+        CWarrior::FightBack(pEnemy);
+    }
+    virtual string GetName() {
+        return pHeadquarter->GetColorStr() + " dragon " + MyIntToStr(nId);
+    }
+};
+class CLion : public CWarrior
+{
+    friend class CHeadquarter;
+
+private:
+    int nLoyalty;
+
+public:
+    static int nLoyaltyDec;
+    // CLion Constructor
+    CLion(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
+    {
+        nLoyalty = pHeadquarter->nMoney;
+    }
+    virtual string GetName() {
+        return pHeadquarter->GetColorStr() + " lion " + MyIntToStr(nId);
+    }
+    bool Runaway()
+    {
+        return nLoyalty <= 0;
+    }
+};
+class CIceman : public CWarrior
+{
+    friend class CHeadquarter;
+    int stepCnt = 0;
+public:
+    // CIceman constructor
+    CIceman(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
+    {
+        weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
+    }
+    virtual void March() {
+        int enemyCityNo = pHeadquarter->pEnemyheadquarter->nCityNo;
+        if (nCityNo != enemyCityNo) {
+                stepCnt++;
+            if (stepCnt % 2 == 0) {
+                nStrength -= 9;
+                if (nStrength < 0)
+                    nStrength = 1;
+                nForce += 20;
+            }
+        }
+        CWarrior::March();
+    }
+    virtual string GetName() {
+        return pHeadquarter->GetColorStr() + " iceman " + MyIntToStr(nId);
+    }
+};
+class CWolf : public CWarrior
+{
+    friend class CHeadquarter;
+
+public:
+    // CWolf Constructor
+    CWolf(int nId_, int nStrength_, int nForce_, int nCityNo_, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_)
+    {
+        //no weapons
+    }
+    virtual string GetName() {
+        return pHeadquarter->GetColorStr() + " wolf " + MyIntToStr(nId);
+    }
+};
+
+/**
+ * Class CHeadquarter
+ */
 void CHeadquarter::LionRunaway()
 {
 
@@ -653,7 +547,7 @@ int CKingdom::TimePass(int nMinutes)
         Blue.WarriorsMarch(0);
         break;
     case 20: // Generate life
-        for (int i = 0; i <= nCityNum + 1; i++)
+        for (int i = 1; i <= nCityNum; i++)
         {
             lifeValue[i] += 10;
         }
@@ -669,9 +563,12 @@ int CKingdom::TimePass(int nMinutes)
     case 38:
         Red.HandleBomb();
         Blue.HandleBomb();
+        break;
     case 40: // 发生战斗
         Red.WarriorsAttack();
         Blue.WarriorsAttack();
+        Red.CleanUpBattleField();
+        Blue.CleanUpBattleField();
         break;
     case 50:
         Red.PrintMoney();  // addfor 2010
@@ -680,6 +577,11 @@ int CKingdom::TimePass(int nMinutes)
     case 55:
         Red.WarriorsReport();
         Blue.WarriorsReport();
+        break;
+    case 59:
+        Red.DeleteDeadWarriors();
+        Blue.DeleteDeadWarriors();
+        break;
     }
     return 1;
 }
@@ -703,7 +605,7 @@ CWarrior *CHeadquarter::QueryCityWarrior(int nCityNo)
 }
 CWarrior *CHeadquarter::QueryNextCityWarrior(int nCityNo)
 {
-    int direction = nColor == COLOR_RED ? 1 : -1;
+    int direction = nColor == COLOR_RED ? -1 : 1; // This n color is enemy's color
     list<CWarrior *>::iterator i;
     for (i = lstWarrior.begin(); i != lstWarrior.end(); i++)
     {
@@ -779,37 +681,74 @@ void CHeadquarter::WarriorsAttack()
     for (j; j != lstWarrior.end(); j++)
     {
         CWarrior *pAttacker = (*j);
-        if (pAttacker->nStrength <= 0)
+        if (pAttacker->nStrength <= 0) {
             continue;
+        }
+        
         int nCityNo = pAttacker->GetPosition();
         CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
-        char szTmp[200];
-        if (pEnemy)
+
+        bool attackFirst;
+        if(pKingdom->flags[nCityNo] == -1) {
+            // COLOR_BLUE = 1
+            // COLOR_RED = 0
+            attackFirst = (nCityNo % 2 != nColor); //奇偶
+        }
+        else {
+            attackFirst = pKingdom->flags[nCityNo] == nColor;
+        }
+
+        if (pEnemy && attackFirst)
         { 
-            if(pEnemy->GetStrength() <= 0)
-                continue; // Shot by arrow
+            if(pEnemy->GetStrength() <= 0) {// Shot by arrow
+                if(pAttacker->GetName().find("dragon") != string::npos) {
+                    ((CDragon *)pAttacker)->fMorale += 0.2;
+                    if(((CDragon *)pAttacker)->fMorale > 0.8) {
+                        string sResult = pAttacker->GetName() + " yelled in city " + MyIntToStr(nCityNo);
+                        AddEvent(EVENT_YELL, nCityNo, nColor, sResult);
+                    }
+                }
+                continue; 
+            }
+
             pAttacker->Attack(pEnemy);
             string sResult = pAttacker->GetName() + " attacked " +
              pEnemy->GetName() + " in city " + MyIntToStr(nCityNo) 
              + " with " + MyIntToStr(pAttacker->GetStrength()) 
-             + " elements and " + MyIntToStr(pAttacker->GetForce())
-             + " force";
-            AddEvent(EVENT_FIGHT_RESULT, nCityNo, nColor, sResult);
-            if(pEnemy->GetStrength() <= 0)
+             + " elements and force " + MyIntToStr(pAttacker->GetForce());
+            AddEvent(EVENT_ATTACK, nCityNo, nColor, sResult);
+            
+            if(pEnemy->GetStrength() <= 0) //attacker alive enemy dead
             {
                 sResult = pEnemy->GetName() + " was killed in city " + MyIntToStr(nCityNo);
-                AddEvent(EVENT_FIGHT_RESULT, nCityNo, nColor, sResult);  
+                AddEvent(EVENT_DEAD, nCityNo, nColor, sResult); 
+                
+                if(pAttacker->GetName().find("dragon") != string::npos) {
+                    ((CDragon *)pAttacker)->fMorale += 0.2;
+                    if(((CDragon *)pAttacker)->fMorale > 0.8) {
+                        sResult = pAttacker->GetName() + " yelled in city " + MyIntToStr(nCityNo);
+                        AddEvent(EVENT_YELL, nCityNo, nColor, sResult);
+                    }
+                }
             }
             else
             {
                 pEnemy->FightBack(pAttacker);
+
                 sResult = pEnemy->GetName() + " fought back against " 
-                + pAttacker->GetName() + " in city " + MyIntToStr(nCityNo) + " with " + MyIntToStr(pEnemy->GetStrength()) + " elements and " + MyIntToStr(pEnemy->GetForce()) + " force";
-                AddEvent(EVENT_FIGHT_RESULT, nCityNo, nColor, sResult);
-                if(pAttacker->GetStrength() <= 0)
+                + pAttacker->GetName() + " in city " + MyIntToStr(nCityNo);
+                AddEvent(EVENT_FIGHT_BACK, nCityNo, nColor, sResult);
+
+                if(pAttacker->GetStrength() <= 0) // attacker dead enemy alive
                 {
                     sResult = pAttacker->GetName() + " was killed in city " + MyIntToStr(nCityNo);
-                    AddEvent(EVENT_FIGHT_RESULT, nCityNo, nColor, sResult);  
+                    AddEvent(EVENT_DEAD, nCityNo, nColor, sResult);  
+                }
+                else // draw
+                {
+                    if(pEnemy->GetName().find("dragon") != string::npos) {
+                        ((CDragon *)pEnemy)->fMorale -= 0.2;
+                    }
                 }
             }
         }
@@ -869,6 +808,8 @@ void CHeadquarter::PickUpLife()
         {
             if(pKingdom->lifeValue[nCityNo] > 0) {
                 nMoney += pKingdom->lifeValue[nCityNo];
+                string sResult = (*it)->GetName() + " earned " + MyIntToStr(pKingdom->lifeValue[nCityNo]) + " elements for his headquarter";
+                AddEvent(EVENT_PICKUP, nCityNo, this->nColor, sResult);
                 pKingdom->lifeValue[nCityNo] = 0;
             }
         }
@@ -884,7 +825,8 @@ void CHeadquarter::CleanUpBattleField()
         CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
         // Our: Alive
         // Enemy: Dead
-        if(pEnemy != NULL && pEnemy->GetStrength() <= 0)
+        if(pAttacker->GetStrength() > 0 && pEnemy != NULL 
+        && pEnemy->GetStrength() <= 0)
         {
             if(nMoney >= 8) {
                 pAttacker->nStrength += 8;
@@ -900,7 +842,8 @@ void CHeadquarter::CleanUpBattleField()
         CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
         // Our: Alive
         // Enemy: Dead
-        if(pEnemy != NULL && pEnemy->GetStrength() <= 0)
+        if(pAttacker->GetStrength()>0 && pEnemy != NULL 
+        && pEnemy->GetStrength() <= 0)
         {
             nMoney += pKingdom->lifeValue[nCityNo];
             string sResult = pAttacker->GetName() +
@@ -910,11 +853,104 @@ void CHeadquarter::CleanUpBattleField()
         }
     }
     //Wolf Rob
-    //TODO:
+    for(auto it = lstWarrior.begin(); it != lstWarrior.end(); it++)
+    {
+        CWarrior *pAttacker = (*it);
+        int nCityNo = pAttacker->GetPosition();
+        CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
+        // Our: Alive
+        // Enemy: Dead
+        if(pAttacker->GetStrength() > 0 && pEnemy != NULL
+        && pEnemy->GetStrength() <= 0)
+        {
+            if(pAttacker->GetName().find("wolf") != string::npos) {
+                for(int i = 0; i < 3; i++) {
+                    if(pEnemy->weapons[i] != NULL && pAttacker->weapons[i] == NULL) {
+                        pAttacker->weapons[i] = pEnemy->weapons[i];
+                        pEnemy->weapons[i] = NULL;
+                    }
+                }
+            }
+        }
+    }
     //Flag check
-    //TODO:
-    //Delete Dead
-    //TODO:
+    for(auto it = lstWarrior.begin(); it != lstWarrior.end(); it++)
+    {
+        CWarrior *pAttacker = (*it);
+        int nCityNo = pAttacker->GetPosition();
+        CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
+        // Our: Alive
+        // Enemy: Dead
+        if(pAttacker->GetStrength() > 0 && pEnemy != NULL
+        && pEnemy->GetStrength() <= 0)
+        {
+            if(pKingdom->prevWinner[nCityNo] == nColor
+            && pKingdom->flags[nCityNo] != nColor) {
+                pKingdom->flags[nCityNo] = nColor;
+                string sResult = GetColorStr() + " flag raised in city "+MyIntToStr(nCityNo);
+                this->AddEvent(EVENT_FLAG, nCityNo, this->nColor, sResult);
+            }
+            pKingdom->prevWinner[nCityNo] = nColor;
+        }
+        // Our:Alive
+        // Enemy: Alive
+        else if(pAttacker->GetStrength() > 0 && pEnemy != NULL && pEnemy->GetStrength() > 0)
+        {
+            pKingdom->prevWinner[nCityNo] = -1;
+        }
+    }
+    // Moved up
+    // Dragon Morale 
+    // for(auto it = lstWarrior.begin(); it != lstWarrior.end(); it++)
+    // {
+    //     CWarrior *pAttacker = (*it);
+    //     int nCityNo = pAttacker->GetPosition();
+    //     CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
+        
+    //     if(pAttacker->GetName().find("dragon") != string::npos) {
+    //         // Our: Alive
+    //         // Enemy: Dead
+    //         if(pAttacker->GetStrength() > 0 && pEnemy != NULL
+    //         && pEnemy->GetStrength() <= 0) {
+    //             ((CDragon *)pAttacker)->fMorale += 0.2;
+    //         }
+    //         // Our: Alive
+    //         // Enemy: Alive
+    //         else if(pAttacker->GetStrength() > 0 && pEnemy != NULL
+    //         && pEnemy->GetStrength() > 0) {
+    //             ((CDragon *)pAttacker)->fMorale -= 0.2;
+    //         }
+    //     }
+    // }
+    // Lion Loyalty
+    for(auto it = lstWarrior.begin(); it != lstWarrior.end(); it++)
+    {
+        CWarrior *pAttacker = (*it);
+        int nCityNo = pAttacker->GetPosition();
+        CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
+        
+        if(pAttacker->GetName().find("lion") != string::npos) {
+            // Our: Alive
+            // Enemy: Alive
+            if(pAttacker->GetStrength() > 0 && pEnemy != NULL
+            && pEnemy->GetStrength() > 0) {
+                ((CLion *)pAttacker)->nLoyalty -= CLion::nLoyaltyDec;
+            }
+        }
+    }
+}
+void CHeadquarter::DeleteDeadWarriors()
+{
+    list<CWarrior *>::iterator i = lstWarrior.begin();
+    while (i != lstWarrior.end())
+    {
+        if ((*i)->GetStrength() <= 0)
+        {
+            i = lstWarrior.erase(i);
+            continue;
+        }
+        i++;
+    }
 }
 void CHeadquarter::AddEvent(EEventType eType, int nCityNo, int nColor, const string &sEventString)
 {
@@ -939,33 +975,103 @@ void CHeadquarter::WarriorBorn()
         return;
     nMoney -= CWarrior::InitialLifeValue[MakingSeq[nColor][nSeqIdx]];
     int nKindNo = MakingSeq[nColor][nSeqIdx];
-
+    float fMorale = (float)nMoney / CWarrior::InitialLifeValue[nKindNo];
+    
     switch (nKindNo)
     {
-    case DRAGON:
-        float fMorale = (float)nMoney / CWarrior::InitialLifeValue[nKindNo];
-        p = new CDragon(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, fMorale, this);
-        break;
-    case NINJA:
-        p = new CNinja(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
-        break;
-    case ICEMAN:
-        p = new CIceman(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
-        break;
-    case LION:
-        p = new CLion(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
-        break;
-    case WOLF:
-        p = new CWolf(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
-        break;
+        case DRAGON:
+            p = new CDragon(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, fMorale, this);
+            break;
+        case NINJA:
+            p = new CNinja(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
+            break;
+        case ICEMAN:
+            p = new CIceman(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
+            break;
+        case LION:
+            p = new CLion(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
+            break;
+        case WOLF:
+            p = new CWolf(nWarriorNo, CWarrior::InitialLifeValue[nKindNo], CWarrior::InitalForce[nKindNo], nCityNo, this);
+            break;
     }
 
     lstWarrior.push_back(p);
     string sEventString = p->GetName() + " born";
     if (nKindNo == LION)
         sEventString += "\nIts loyalty is " + MyIntToStr(((CLion *)p)->nLoyalty);
+    if (nKindNo == DRAGON) {
+        char sTmp[20];
+        sprintf(sTmp, "%.2f", ((CDragon *)p)->fMorale);
+        sEventString += "\nIts morale is " + string(sTmp);
+    }
     pKingdom->AddEvent(EVENT_BORN, nCityNo, nColor, sEventString);
     nWarriorNo++;
+}
+/**
+ * Class CWarrior
+ */
+int CWarrior::GetAttackDamage()
+{
+    int atk = 0;
+    atk += nForce;
+    if (weapons[WEAPON_SWORD]) {
+        atk += weapons[WEAPON_SWORD]->GetForce();
+    }
+    return atk;
+}
+int CWarrior::GetFightBackDamage()
+{
+    int dmg = 0;
+    if (weapons[WEAPON_SWORD]) {
+        dmg += weapons[WEAPON_SWORD]->GetForce();
+    }
+    return dmg;
+}
+void CWarrior::Attack(CWarrior *pEnemy){
+    int atk = 0;
+    atk += nForce;
+    if (weapons[WEAPON_SWORD]) {
+        atk += weapons[WEAPON_SWORD]->GetForce();
+        weapons[WEAPON_SWORD]->Use();
+    }
+    pEnemy->nStrength -= atk;
+}
+void CWarrior::FightBack(CWarrior *pEnemy) {
+    if(nStrength <= 0)  return; //Dead already
+    int atk = 0;
+    atk += nForce  / 2;
+    if (weapons[WEAPON_SWORD]) {
+        atk += weapons[WEAPON_SWORD]->GetForce();
+        weapons[WEAPON_SWORD]->Use();
+    }
+    pEnemy->nStrength -= atk;
+}
+string CWarrior::ReportStatus()
+{
+    string sRes = " has ";
+    if(!weapons[WEAPON_ARROW] && !weapons[WEAPON_SWORD] && !weapons[WEAPON_BOMB])
+        sRes += "no weapon";
+    else {
+        if(weapons[WEAPON_ARROW]) {
+            sRes += "arrow(" + to_string(3 - ((CArrow *)weapons[WEAPON_ARROW])->usedTimes) + "),";
+        }
+        if(weapons[WEAPON_BOMB]) {
+            sRes += "bomb,";
+        }
+        if(weapons[WEAPON_SWORD]) {
+            sRes += "sword(" + to_string(weapons[WEAPON_SWORD]->GetForce()) + "),";
+        }
+    }
+    if(sRes[sRes.length()-1] == ',')
+        sRes = sRes.substr(0, sRes.length()-1);
+    return sRes;
+}
+CWarrior::~CWarrior()
+{
+    for (int i = 0; i < MAX_WPS; ++i)
+        if (weapons[i])
+            delete weapons[i];
 }
 
 const char *CWeapon::Names[WEAPON_NUM] = {"sword", "bomb", "arrow"};
@@ -973,6 +1079,7 @@ const char *CWarrior::Names[WARRIOR_NUM] = {"dragon", "ninja", "iceman", "lion",
 int CWarrior::InitialLifeValue[WARRIOR_NUM];
 int CWarrior::InitalForce[WARRIOR_NUM];
 int CLion::nLoyaltyDec;
+int CArrow::initialPower;
 int CHeadquarter::MakingSeq[2][WARRIOR_NUM] = {{2, 3, 4, 1, 0}, {3, 0, 1, 2, 4}};
 int main()
 {
@@ -984,7 +1091,7 @@ int main()
     {
         cin >> M >> N >> R >> K >> T;
         CLion::nLoyaltyDec = K;
-        CArrow::initalPower = R;
+        CArrow::initialPower = R;
         // 第二行：五个整数，依次是 dragon 、NINJA、iceman、lion、wolf 的初始生命值。它们都大于0小于等于100
         int i;
         for (i = 0; i < WARRIOR_NUM; i++)
