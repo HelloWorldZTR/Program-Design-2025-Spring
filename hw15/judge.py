@@ -6,8 +6,8 @@ parent_dir = 'D:\\Develop\\algorithm\\Program-Design-2025-Spring\\hw15\\'
 os.chdir(parent_dir)
 
 source_file = "a.cpp"
-input_file = "Warcraft.in"
-output_file = "Warcraft.out"
+input_file = "extra.in"
+output_file = "extra.out"
 compiled_file = "a.exe"
 
 # Compile the C++ source file
@@ -33,6 +33,9 @@ else:
         with open("program_output.txt", "r") as program_output, open(output_file, "r") as expected_output:
             line_number = 1
             for program_line, expected_line in zip(program_output, expected_output):
+                # if line_number == 11308:
+                #     line_number += 1
+                #     continue
                 if program_line.strip() != expected_line.strip():
                     print("\n======================\nMismatch found:")
                     print(f"On line {line_number}:")

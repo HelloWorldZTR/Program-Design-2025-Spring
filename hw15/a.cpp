@@ -198,16 +198,16 @@ public:
             return true;
         else if (nTime > e2.nTime)
             return false;
-        /*
-                if( eEventType == e2.eEventType && eEventType == EVENT_WARRIOR_REPORT) {
-                    if( nColor < e2.nColor )
-                        return true;
-                    else if( nColor == e2.nColor)
-                        return nCityNo < e2.nCityNo ;
-                    else
-                        return false;
-                }
-        */
+
+        if( eEventType == e2.eEventType && eEventType == EVENT_WARRIOR_REPORT) { // Special case
+            if( nColor < e2.nColor )
+                return true;
+            else if( nColor == e2.nColor)
+                return nCityNo < e2.nCityNo ;
+            else
+                return false;
+        }
+
         if (nCityNo < e2.nCityNo)
             return true;
         else if (nCityNo > e2.nCityNo)
@@ -300,8 +300,6 @@ public:
     friend class CWarrior;
     CWarrior *master;
     static const char *Names[WEAPON_NUM];
-    friend int WpCompare(const void *wp1, const void *wp2);
-    friend int WpCompare2(const void *wp1, const void *wp2);
 
     virtual int GetForce() {};
     virtual void Use() {};
@@ -310,6 +308,7 @@ public:
 };
 class CSword : public CWeapon
 {
+public:
     int power;
 public:
     virtual void Use()
@@ -351,8 +350,6 @@ public:
             power = 0;
         }
     }
-    friend int WpCompare(const void *wp1, const void *wp2);
-    friend int WpCompare2(const void *wp1, const void *wp2);
 };
 class CBomb : public CWeapon
 {
@@ -419,8 +416,8 @@ class CDragon : public CWarrior
 
 public:
     // CDragon Constructor
-    float fMorale;
-    CDragon(int nId_, int nStrength_, int nForce_, int nCityNo_, float fMorale, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_), fMorale(fMorale)
+    double fMorale;
+    CDragon(int nId_, int nStrength_, int nForce_, int nCityNo_, double fMorale, CHeadquarter *pHeadquarter_) : CWarrior(nId_, nStrength_, nForce_, nCityNo_, pHeadquarter_), fMorale(fMorale)
     {
         weapons[nId % 3] = CWeapon::NewWeapon(nId % 3, this);
     }
@@ -474,7 +471,7 @@ public:
                 stepCnt++;
             if (stepCnt % 2 == 0) {
                 nStrength -= 9;
-                if (nStrength < 0)
+                if (nStrength <= 0)
                     nStrength = 1;
                 nForce += 20;
             }
@@ -703,13 +700,17 @@ void CHeadquarter::WarriorsAttack()
             if(pEnemy->GetStrength() <= 0) {// Shot by arrow
                 if(pAttacker->GetName().find("dragon") != string::npos) {
                     ((CDragon *)pAttacker)->fMorale += 0.2;
-                    if(((CDragon *)pAttacker)->fMorale > 0.8) {
+
+                    if(pAttacker->GetStrength()>0 && ((CDragon *)pAttacker)->fMorale > 0.8) {
                         string sResult = pAttacker->GetName() + " yelled in city " + MyIntToStr(nCityNo);
                         AddEvent(EVENT_YELL, nCityNo, nColor, sResult);
                     }
                 }
                 continue; 
             }
+            // Cache the life before attack
+            int attackerLife = pAttacker->GetStrength();
+            int enemyLife = pEnemy->GetStrength();
 
             pAttacker->Attack(pEnemy);
             string sResult = pAttacker->GetName() + " attacked " +
@@ -725,24 +726,28 @@ void CHeadquarter::WarriorsAttack()
                 
                 if(pAttacker->GetName().find("dragon") != string::npos) {
                     ((CDragon *)pAttacker)->fMorale += 0.2;
-                    if(((CDragon *)pAttacker)->fMorale > 0.8) {
-                        sResult = pAttacker->GetName() + " yelled in city " + MyIntToStr(nCityNo);
-                        AddEvent(EVENT_YELL, nCityNo, nColor, sResult);
-                    }
+                }
+
+                if(pEnemy->GetName().find("lion") != string::npos) {
+                    pAttacker->SetStrength(pAttacker->GetStrength() + enemyLife);
                 }
             }
             else
             {
                 pEnemy->FightBack(pAttacker);
-
-                sResult = pEnemy->GetName() + " fought back against " 
-                + pAttacker->GetName() + " in city " + MyIntToStr(nCityNo);
-                AddEvent(EVENT_FIGHT_BACK, nCityNo, nColor, sResult);
+                if(pEnemy->GetName().find("ninja")==string::npos) { // Not ninja
+                    sResult = pEnemy->GetName() + " fought back against " 
+                    + pAttacker->GetName() + " in city " + MyIntToStr(nCityNo);
+                    AddEvent(EVENT_FIGHT_BACK, nCityNo, nColor, sResult);
+                }
 
                 if(pAttacker->GetStrength() <= 0) // attacker dead enemy alive
                 {
                     sResult = pAttacker->GetName() + " was killed in city " + MyIntToStr(nCityNo);
-                    AddEvent(EVENT_DEAD, nCityNo, nColor, sResult);  
+                    AddEvent(EVENT_DEAD, nCityNo, nColor, sResult);
+                    if(pAttacker->GetName().find("lion")!=string::npos) {
+                        pEnemy->SetStrength(pEnemy->GetStrength() + attackerLife);
+                    }
                 }
                 else // draw
                 {
@@ -750,6 +755,11 @@ void CHeadquarter::WarriorsAttack()
                         ((CDragon *)pEnemy)->fMorale -= 0.2;
                     }
                 }
+            }
+
+            if(pAttacker->GetName().find("dragon")!=string::npos && pAttacker->GetStrength()>0 && ((CDragon *)pAttacker)->fMorale > 0.8) {
+                string sResult = pAttacker->GetName() + " yelled in city " + MyIntToStr(nCityNo);
+                AddEvent(EVENT_YELL, nCityNo, nColor, sResult);
             }
         }
     }
@@ -759,18 +769,30 @@ void CHeadquarter::HandleArrow()
     for(auto it = lstWarrior.begin(); it != lstWarrior.end(); it++)
     {
         CWarrior *pAttacker = (*it);
-        if(pAttacker -> weapons[WEAPON_ARROW] == NULL)
+        auto hasArrow = [](CWarrior *p){return p->weapons[WEAPON_ARROW] != NULL && ((CArrow*)p->weapons[WEAPON_ARROW])->usedTimes !=3;};
+        if(!hasArrow(pAttacker))
             continue;
         int nCityNo = pAttacker->GetPosition();
         CWarrior *pEnemy = pEnemyheadquarter->QueryNextCityWarrior(nCityNo);
         if(pEnemy) {
             int damage = ((CArrow *)pAttacker->weapons[WEAPON_ARROW])->GetForce(pEnemy);
+            int enemyLife = pEnemy->GetStrength();
             pAttacker->weapons[WEAPON_ARROW]->Use();
             pEnemy->SetStrength(pEnemy->GetStrength() - damage);
 
             if(pEnemy->GetStrength() <= 0) {
                 string sResult = pAttacker->GetName() + " shot and killed " + pEnemy->GetName();
                 this->AddEvent(EVENT_ARROW, nCityNo, this->nColor, sResult);
+                // Lion Life
+                if(pEnemy->GetName().find("lion") != string::npos) {
+                    // pAttacker->SetStrength(pAttacker->GetStrength() + enemyLife);
+                    // int mask = nColor == COLOR_RED ? 1 : -1;
+                    // int nextCityNo = pAttacker->GetPosition() + mask;
+                    // CWarrior *pNext = QueryCityWarrior(nextCityNo);
+                    // if(pNext) {
+                    //     pNext->SetStrength(pNext->GetStrength() + enemyLife);
+                    // }
+                }
             }
             else {
                 string sResult = pAttacker->GetName() + " shot";
@@ -786,16 +808,30 @@ void CHeadquarter::HandleBomb()
         CWarrior *pAttacker = (*it);
         if(pAttacker -> weapons[WEAPON_BOMB] == NULL || pAttacker->GetStrength() <= 0)
             continue;
+        
         int nCityNo = pAttacker->GetPosition();
         CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
         if(pEnemy == NULL || pEnemy->GetStrength() <= 0)
             continue;
+
+        bool attackFirst;
+        if(pKingdom->flags[nCityNo] == -1) {
+            // COLOR_BLUE = 1
+            // COLOR_RED = 0
+            attackFirst = (nCityNo % 2 != nColor); //奇偶
+        }
+        else {
+            attackFirst = pKingdom->flags[nCityNo] == nColor;
+        }
+
         if(
-            pAttacker->GetStrength() <= pEnemy->GetAttackDamage() &&
-            pAttacker->GetStrength() <= pEnemy->GetFightBackDamage()
+            (!attackFirst && pAttacker->GetStrength() <= pEnemy->GetAttackDamage()) ||
+            (attackFirst && pEnemy->GetStrength() > pAttacker->GetAttackDamage() && pAttacker->GetStrength() <= pEnemy->GetFightBackDamage())
         ){
-            string sResult = pAttacker->GetName() + " used bomb and killed " + pEnemy->GetName();
+            string sResult = pAttacker->GetName() + " used a bomb and killed " + pEnemy->GetName();
             this->AddEvent(EVENT_BOMB, nCityNo, this->nColor, sResult);
+            pAttacker->SetStrength(-1); //Dead AF
+            pEnemy->SetStrength(-1);
         }
     }
 }
@@ -860,15 +896,25 @@ void CHeadquarter::CleanUpBattleField()
         CWarrior *pEnemy = pEnemyheadquarter->QueryCityWarrior(nCityNo);
         // Our: Alive
         // Enemy: Dead
+        auto hasSword = [](CWarrior *p){return p->weapons[WEAPON_SWORD] != NULL && ((CSword*)p->weapons[WEAPON_SWORD])->power > 0;};
+        auto hasArrow = [](CWarrior *p){return p->weapons[WEAPON_ARROW] != NULL && ((CArrow*)p->weapons[WEAPON_ARROW])->usedTimes !=3;};
+        auto hasBomb = [](CWarrior *p){return p->weapons[WEAPON_BOMB] != NULL;};
+
         if(pAttacker->GetStrength() > 0 && pEnemy != NULL
         && pEnemy->GetStrength() <= 0)
         {
             if(pAttacker->GetName().find("wolf") != string::npos) {
-                for(int i = 0; i < 3; i++) {
-                    if(pEnemy->weapons[i] != NULL && pAttacker->weapons[i] == NULL) {
-                        pAttacker->weapons[i] = pEnemy->weapons[i];
-                        pEnemy->weapons[i] = NULL;
-                    }
+                if(hasSword(pEnemy) && !hasSword(pAttacker)) {
+                    pAttacker->weapons[WEAPON_SWORD] = pEnemy->weapons[WEAPON_SWORD];
+                    pEnemy->weapons[WEAPON_SWORD] = NULL;
+                }
+                if(hasArrow(pEnemy) && !hasArrow(pAttacker)) {
+                    pAttacker->weapons[WEAPON_ARROW] = pEnemy->weapons[WEAPON_ARROW];
+                    pEnemy->weapons[WEAPON_ARROW] = NULL;
+                }
+                if(hasBomb(pEnemy) && !hasBomb(pAttacker)) {
+                    pAttacker->weapons[WEAPON_BOMB] = pEnemy->weapons[WEAPON_BOMB];
+                    pEnemy->weapons[WEAPON_BOMB] = NULL;
                 }
             }
         }
@@ -975,7 +1021,7 @@ void CHeadquarter::WarriorBorn()
         return;
     nMoney -= CWarrior::InitialLifeValue[MakingSeq[nColor][nSeqIdx]];
     int nKindNo = MakingSeq[nColor][nSeqIdx];
-    float fMorale = (float)nMoney / CWarrior::InitialLifeValue[nKindNo];
+    double fMorale = (double)nMoney / (double)CWarrior::InitialLifeValue[nKindNo];
     
     switch (nKindNo)
     {
@@ -1013,8 +1059,7 @@ void CHeadquarter::WarriorBorn()
  */
 int CWarrior::GetAttackDamage()
 {
-    int atk = 0;
-    atk += nForce;
+    int atk = nForce;
     if (weapons[WEAPON_SWORD]) {
         atk += weapons[WEAPON_SWORD]->GetForce();
     }
@@ -1022,7 +1067,7 @@ int CWarrior::GetAttackDamage()
 }
 int CWarrior::GetFightBackDamage()
 {
-    int dmg = 0;
+    int dmg = nForce * 0.5;
     if (weapons[WEAPON_SWORD]) {
         dmg += weapons[WEAPON_SWORD]->GetForce();
     }
@@ -1050,16 +1095,19 @@ void CWarrior::FightBack(CWarrior *pEnemy) {
 string CWarrior::ReportStatus()
 {
     string sRes = " has ";
-    if(!weapons[WEAPON_ARROW] && !weapons[WEAPON_SWORD] && !weapons[WEAPON_BOMB])
+    auto hasSword = [](CWarrior *p){return p->weapons[WEAPON_SWORD] != NULL && ((CSword*)p->weapons[WEAPON_SWORD])->power > 0;};
+    auto hasArrow = [](CWarrior *p){return p->weapons[WEAPON_ARROW] != NULL && ((CArrow*)p->weapons[WEAPON_ARROW])->usedTimes !=3;};
+    auto hasBomb = [](CWarrior *p){return p->weapons[WEAPON_BOMB] != NULL;};
+    if(!hasSword(this) && !hasArrow(this) && !hasBomb(this))
         sRes += "no weapon";
     else {
-        if(weapons[WEAPON_ARROW]) {
+        if(hasArrow(this)) {
             sRes += "arrow(" + to_string(3 - ((CArrow *)weapons[WEAPON_ARROW])->usedTimes) + "),";
         }
-        if(weapons[WEAPON_BOMB]) {
+        if(hasBomb(this)) {
             sRes += "bomb,";
         }
-        if(weapons[WEAPON_SWORD]) {
+        if(hasSword(this)) {
             sRes += "sword(" + to_string(weapons[WEAPON_SWORD]->GetForce()) + "),";
         }
     }
